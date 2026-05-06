@@ -53,7 +53,7 @@ URL:  {{_mcpEndpoint}}
 
     public string ManualStdioSnippet()
     {
-        var bridge = BridgeProjectPath();
+        var bridge = GetBridgeProjectPath();
         if (bridge is null)
         {
             return "Stdio bridge is unavailable because the repository path could not be discovered.";
@@ -71,6 +71,13 @@ args:
   - --endpoint
   - {{_mcpEndpoint}}
 """;
+    }
+
+    public string? GetBridgeProjectPath()
+    {
+        return _paths.BridgeProjectPath is not null && File.Exists(_paths.BridgeProjectPath)
+            ? _paths.BridgeProjectPath
+            : null;
     }
 
     private AgentConfigStatus DetectCodex(string? overridePath = null)
@@ -222,9 +229,7 @@ url = "{{_mcpEndpoint}}"
 
     private string? BridgeProjectPath()
     {
-        return _paths.BridgeProjectPath is not null && File.Exists(_paths.BridgeProjectPath)
-            ? _paths.BridgeProjectPath
-            : null;
+        return GetBridgeProjectPath();
     }
 
     private static IReadOnlyList<string> ClaudeConfigPaths()
