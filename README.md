@@ -38,6 +38,9 @@ Run the desktop center:
 dotnet run --project mcp-center/src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj
 ```
 
+Use `-- --start-minimized` to start the desktop center directly in the
+Windows tray or macOS menu bar.
+
 Default endpoints:
 
 - MCP HTTP: `http://127.0.0.1:9401/mcp`

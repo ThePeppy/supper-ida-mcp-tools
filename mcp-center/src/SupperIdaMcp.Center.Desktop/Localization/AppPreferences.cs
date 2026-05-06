@@ -9,6 +9,8 @@ internal static class AppPreferencesStore
     private const string DirectoryName = ".supper-ida-mcp-center";
     private const string FileName = "preferences.json";
 
+    public static event Action<AppPreferences>? Saved;
+
     public static AppPreferences Load()
     {
         try
@@ -34,6 +36,7 @@ internal static class AppPreferencesStore
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var file = new PreferenceFile(LanguageCode(preferences.Language));
         File.WriteAllText(path, JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true }));
+        Saved?.Invoke(preferences);
     }
 
     private static string PreferencesPath()

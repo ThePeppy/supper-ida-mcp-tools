@@ -12,6 +12,12 @@ Desktop mode:
 dotnet run --project src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj
 ```
 
+Start directly in the tray/menu bar:
+
+```bash
+dotnet run --project src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj -- --start-minimized
+```
+
 Default endpoints:
 
 - MCP HTTP: `http://127.0.0.1:9401/mcp`

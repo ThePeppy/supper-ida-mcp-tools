@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 
 namespace SupperIdaMcp.Center.Desktop;
 
@@ -9,7 +10,7 @@ internal static class Program
     {
         DesktopSettings.Configure(args);
         BuildAvaloniaApp()
-            .StartWithClassicDesktopLifetime(args);
+            .StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
     }
 
     public static AppBuilder BuildAvaloniaApp()

@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using SupperIdaMcp.Center.Core;
 using SupperIdaMcp.Center.Desktop.Localization;
 using SupperIdaMcp.Center.Desktop.Setup;
+using SupperIdaMcp.Center.Desktop.Shell;
 using SupperIdaMcp.Center.Desktop.UI;
 using SupperIdaMcp.Center.Ida;
 
@@ -61,6 +62,7 @@ public sealed class MainWindow : Window
         Height = 820;
         MinWidth = 1120;
         MinHeight = 720;
+        Icon = AppIconService.LoadWindowIcon();
         Background = Brush(SurfacePrimary);
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.SubpixelAntialias);
         TextOptions.SetTextHintingMode(this, TextHintingMode.Strong);
@@ -1322,7 +1324,7 @@ public sealed class MainWindow : Window
             SettingLine(_text.T("settings.tcpPort"), DesktopSettings.Current.TcpPort.ToString(), RowKind.Neutral),
             SettingLine(_text.T("settings.logLevel"), "Info", RowKind.Neutral),
             SettingLine(_text.T("settings.launchLogin"), _text.T("status.enabled"), RowKind.Success),
-            SettingLine(_text.T("settings.startMinimized"), _text.T("status.disabled"), RowKind.Neutral)));
+            SettingLine(_text.T("settings.startMinimized"), DesktopSettings.Current.StartMinimized ? _text.T("status.enabled") : _text.T("status.disabled"), DesktopSettings.Current.StartMinimized ? RowKind.Success : RowKind.Neutral)));
     }
 
     private Control ManualConfigurationCard()
