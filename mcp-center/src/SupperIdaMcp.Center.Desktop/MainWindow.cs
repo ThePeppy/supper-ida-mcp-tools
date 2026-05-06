@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -155,33 +154,32 @@ public sealed class MainWindow : Window
     private Control NavButton(CenterPage page)
     {
         var selected = _selectedPage == page;
-        var button = new Button
+        var foreground = selected ? ForegroundInverse : ForegroundSecondary;
+        var content = new Grid
         {
-            Height = 34,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(9, 0),
-            Background = selected ? Brush(SurfaceInverse) : Brush(SurfacePrimary),
-            Foreground = selected ? Brush(ForegroundPrimary) : Brush(ForegroundSecondary),
-            BorderBrush = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(8),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Content = new Grid
+            ColumnDefinitions = new ColumnDefinitions("15,*"),
+            ColumnSpacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
             {
-                ColumnDefinitions = new ColumnDefinitions("15,*"),
-                ColumnSpacing = 8,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    LineIcon(NavGlyph(page), selected ? ForegroundInverse : ForegroundSecondary).WithColumn(0),
-                    Text(PageTitle(page), 13, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundInverse : ForegroundSecondary)
-                        .WithColumn(1)
-                }
+                LineIcon(NavGlyph(page), foreground).WithColumn(0),
+                Text(PageTitle(page), 13, selected ? FontWeight.SemiBold : FontWeight.Normal, foreground)
+                    .WithColumn(1)
             }
         };
-        button.Click += (_, _) => SelectPage(page);
-        AttachButtonHover(button, selected ? ButtonKind.Selected : ButtonKind.Ghost, selected);
-        return button;
+
+        var normal = selected
+            ? new ButtonPalette(Brush(SurfaceInverse), Brushes.Transparent, Brush(ForegroundInverse), ForegroundInverse, 8, 34, 13, new Thickness(9, 0))
+            : new ButtonPalette(Brush(SurfacePrimary), Brushes.Transparent, Brush(ForegroundSecondary), ForegroundSecondary, 8, 34, 13, new Thickness(9, 0));
+        var hover = selected
+            ? normal
+            : new ButtonPalette(Brush(SurfaceTertiary), Brushes.Transparent, Brush(ForegroundPrimary), ForegroundPrimary, 8, 34, 13, new Thickness(9, 0));
+
+        return ClickableSurface(content, () =>
+        {
+            SelectPage(page);
+            return Task.CompletedTask;
+        }, normal, hover, hoverEnabled: !selected);
     }
 
     private Control BuildRuntimeCard()
@@ -658,12 +656,7 @@ public sealed class MainWindow : Window
             Background = Brush(active ? SurfaceRaised : SurfacePrimary),
             BorderBrush = Brush(active ? AccentPrimary : SurfacePrimary),
             BorderThickness = active ? new Thickness(1) : new Thickness(0),
-            Child = grid,
-            Transitions =
-            [
-                new BrushTransition { Property = Border.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(120) },
-                new BrushTransition { Property = Border.BorderBrushProperty, Duration = TimeSpan.FromMilliseconds(120) }
-            ]
+            Child = grid
         }.WithHover(Brush(SurfaceRaised), Brush(active ? AccentPrimary : BorderSubtle));
     }
 
@@ -671,7 +664,7 @@ public sealed class MainWindow : Window
     {
         return new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("118,82,50,62,145,135,68,72,*"),
+            ColumnDefinitions = new ColumnDefinitions("118,82,50,62,*,*,68,72,192"),
             ColumnSpacing = 8,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -706,11 +699,14 @@ public sealed class MainWindow : Window
 
     private Control TargetActions(TargetInfo target)
     {
-        return Stack(Orientation.Horizontal, 4,
+        var actions = Stack(Orientation.Horizontal, 4,
             TargetActionButton(_text.T("button.ping"), 34, () => CallTargetToolAsync("ida_ping_target", target.InstanceId, _text.T("action.pingSent"))),
             TargetActionButton(_text.T("button.refreshShort"), 58, () => CallTargetToolAsync("ida_get_metadata", target.InstanceId, _text.T("action.metadataRefreshed"))),
             TargetActionButton(_text.T("button.openShort"), 44, () => OpenTargetInIdaAsync(target), enabled: !string.IsNullOrWhiteSpace(target.InputPath)),
             TargetActionButton(_text.T("button.close"), 44, () => CallTargetCloseAsync(target), kind: ButtonKind.DangerMini));
+        actions.VerticalAlignment = VerticalAlignment.Center;
+        actions.HorizontalAlignment = HorizontalAlignment.Left;
+        return actions;
     }
 
     private Control BuildActivityPage()
@@ -1258,19 +1254,28 @@ public sealed class MainWindow : Window
     private Control LanguageButton(AppLanguage language)
     {
         var selected = _text.Language == language;
-        var button = new Button
-        {
-            Height = 28,
-            Background = selected ? Brush(SurfacePrimary) : Brushes.Transparent,
-            Foreground = Brush(selected ? ForegroundPrimary : ForegroundSecondary),
-            BorderBrush = Brushes.Transparent,
-            CornerRadius = new CornerRadius(6),
-            Content = Text(language == AppLanguage.Chinese ? "中文" : "English", 11, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundSecondary),
-            Cursor = new Cursor(StandardCursorType.Hand)
-        };
-        button.Click += (_, _) => SetLanguage(language);
-        AttachButtonHover(button, selected ? ButtonKind.Selected : ButtonKind.Ghost, selected);
-        return button;
+        var normal = new ButtonPalette(
+            selected ? Brush(SurfacePrimary) : Brushes.Transparent,
+            Brushes.Transparent,
+            Brush(selected ? ForegroundPrimary : ForegroundSecondary),
+            selected ? ForegroundPrimary : ForegroundSecondary,
+            6,
+            28,
+            11,
+            new Thickness(0));
+        var hover = selected
+            ? normal
+            : normal with { Background = Brush(SurfacePrimary), ForegroundColor = ForegroundPrimary, Foreground = Brush(ForegroundPrimary) };
+        return ClickableSurface(
+            CenteredText(language == AppLanguage.Chinese ? "中文" : "English", 11, selected ? FontWeight.SemiBold : FontWeight.Normal, normal.ForegroundColor),
+            () =>
+            {
+                SetLanguage(language);
+                return Task.CompletedTask;
+            },
+            normal,
+            hover,
+            hoverEnabled: !selected);
     }
 
     private void SetLanguage(AppLanguage language)
@@ -1382,19 +1387,27 @@ public sealed class MainWindow : Window
     private Control MiniLangButton(string label, AppLanguage language)
     {
         var selected = _text.Language == language;
-        var button = new Button
-        {
-            Width = 25,
-            Height = 26,
-            Margin = new Thickness(2, 2, 0, 2),
-            Padding = new Thickness(0),
-            Background = selected ? Brush(SurfacePrimary) : Brushes.Transparent,
-            BorderBrush = Brushes.Transparent,
-            Foreground = Brush(selected ? ForegroundPrimary : ForegroundMuted),
-            Content = Text(label, 10, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundMuted, DataFont),
-            Cursor = new Cursor(StandardCursorType.Hand)
-        };
-        button.Click += (_, _) => SetLanguage(language);
+        var normal = new ButtonPalette(
+            selected ? Brush(SurfacePrimary) : Brushes.Transparent,
+            Brushes.Transparent,
+            Brush(selected ? ForegroundPrimary : ForegroundMuted),
+            selected ? ForegroundPrimary : ForegroundMuted,
+            6,
+            26,
+            10,
+            new Thickness(0));
+        var button = ClickableSurface(
+            CenteredText(label, 10, selected ? FontWeight.SemiBold : FontWeight.Normal, normal.ForegroundColor, DataFont),
+            () =>
+            {
+                SetLanguage(language);
+                return Task.CompletedTask;
+            },
+            normal,
+            normal,
+            hoverEnabled: false);
+        button.Width = 25;
+        button.Margin = new Thickness(2, 2, 0, 2);
         return button;
     }
 
@@ -1707,52 +1720,23 @@ public sealed class MainWindow : Window
         };
     }
 
-    private Button ActionButton(string text, Func<Task> action, ButtonKind kind = ButtonKind.Secondary, bool enabled = true)
+    private Border ActionButton(string text, Func<Task> action, ButtonKind kind = ButtonKind.Secondary, bool enabled = true)
     {
         var palette = GetButtonPalette(kind);
-        var button = new Button
-        {
-            MinHeight = palette.Height,
-            Padding = palette.Padding,
-            Background = palette.Background,
-            Foreground = palette.Foreground,
-            BorderBrush = palette.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(palette.Radius),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            IsEnabled = enabled,
-            Opacity = enabled ? 1 : 0.45,
-            Content = Text(text, palette.FontSize, FontWeight.SemiBold, palette.ForegroundColor)
-        };
-
-        button.Click += async (_, _) =>
-        {
-            if (!button.IsEnabled)
-            {
-                return;
-            }
-
-            button.IsEnabled = false;
-            try
-            {
-                await action().ConfigureAwait(true);
-            }
-            finally
-            {
-                button.IsEnabled = enabled;
-            }
-        };
-
-        AttachButtonHover(button, kind, selected: false);
-        return button;
+        return ClickableSurface(
+            CenteredText(text, palette.FontSize, FontWeight.SemiBold, palette.ForegroundColor),
+            action,
+            palette,
+            ButtonHoverPalette(kind),
+            enabled);
     }
 
-    private Button MiniButton(string text, Func<Task> action, ButtonKind kind = ButtonKind.Mini, bool enabled = true)
+    private Border MiniButton(string text, Func<Task> action, ButtonKind kind = ButtonKind.Mini, bool enabled = true)
     {
         return ActionButton(text, action, kind, enabled);
     }
 
-    private Button TargetActionButton(string text, double width, Func<Task> action, ButtonKind kind = ButtonKind.Mini, bool enabled = true)
+    private Border TargetActionButton(string text, double width, Func<Task> action, ButtonKind kind = ButtonKind.Mini, bool enabled = true)
     {
         var button = ActionButton(text, action, kind, enabled);
         button.Width = width;
@@ -1761,23 +1745,109 @@ public sealed class MainWindow : Window
         return button;
     }
 
-    private Button IconButton(string iconName, Func<Task> action, ButtonKind kind = ButtonKind.Square, bool enabled = true)
+    private Border IconButton(string iconName, Func<Task> action, ButtonKind kind = ButtonKind.Square, bool enabled = true)
     {
         var palette = GetButtonPalette(kind);
-        var button = ActionButton(string.Empty, action, kind, enabled);
+        var button = ClickableSurface(
+            LineIcon(iconName, palette.ForegroundColor),
+            action,
+            palette,
+            ButtonHoverPalette(kind),
+            enabled);
         button.Width = palette.Height;
         button.MinWidth = palette.Height;
         button.Padding = new Thickness(0);
-        button.Content = LineIcon(iconName, palette.ForegroundColor);
         return button;
     }
 
-    private Button SmallSquareButton(string text, Func<Task> action)
+    private Border SmallSquareButton(string text, Func<Task> action)
     {
         var button = ActionButton(text, action, ButtonKind.Square);
         button.Width = 30;
         button.MinWidth = 30;
         button.Padding = new Thickness(0);
+        return button;
+    }
+
+    private Border ClickableSurface(
+        Control content,
+        Func<Task> action,
+        ButtonPalette normal,
+        ButtonPalette hover,
+        bool enabled = true,
+        bool hoverEnabled = true)
+    {
+        var button = new Border
+        {
+            MinHeight = normal.Height,
+            Padding = normal.Padding,
+            Background = normal.Background,
+            BorderBrush = normal.Border,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(normal.Radius),
+            Cursor = new Cursor(enabled ? StandardCursorType.Hand : StandardCursorType.Arrow),
+            Opacity = enabled ? 1 : 0.45,
+            Child = content
+        };
+
+        var over = false;
+        var pressed = false;
+        var busy = false;
+
+        void Apply(ButtonPalette palette)
+        {
+            button.Background = palette.Background;
+            button.BorderBrush = palette.Border;
+        }
+
+        button.PointerEntered += (_, _) =>
+        {
+            over = true;
+            if (enabled && hoverEnabled && !busy)
+            {
+                Apply(hover);
+            }
+        };
+        button.PointerExited += (_, _) =>
+        {
+            over = false;
+            pressed = false;
+            if (enabled && !busy)
+            {
+                Apply(normal);
+            }
+        };
+        button.PointerPressed += (_, _) =>
+        {
+            if (enabled && !busy)
+            {
+                pressed = true;
+                button.Opacity = 0.78;
+            }
+        };
+        button.PointerReleased += async (_, _) =>
+        {
+            if (!enabled || busy || !over || !pressed)
+            {
+                pressed = false;
+                return;
+            }
+
+            pressed = false;
+            busy = true;
+            button.Opacity = 0.62;
+            try
+            {
+                await action().ConfigureAwait(true);
+            }
+            finally
+            {
+                busy = false;
+                button.Opacity = enabled ? 1 : 0.45;
+                Apply(over && hoverEnabled ? hover : normal);
+            }
+        };
+
         return button;
     }
 
@@ -2271,7 +2341,7 @@ public sealed class MainWindow : Window
     {
         return kind switch
         {
-            ButtonKind.Primary => new ButtonPalette(Brush(AccentBlue), Brush(AccentBlue), Brush(ForegroundInverse), AccentBlue, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.Primary => new ButtonPalette(Brush(AccentPrimary), Brush(AccentPrimary), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
             ButtonKind.Dark => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 11, new Thickness(12, 8)),
             ButtonKind.Green => new ButtonPalette(Brush(AccentPrimary), Brush(AccentPrimary), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 12, new Thickness(12, 9)),
             ButtonKind.ActionDark => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 12, 36, 13, new Thickness(12, 8)),
@@ -2296,7 +2366,7 @@ public sealed class MainWindow : Window
     {
         return kind switch
         {
-            ButtonKind.Primary => new ButtonPalette(Brush("#1D4ED8"), Brush("#1D4ED8"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.Primary => new ButtonPalette(Brush("#255C35"), Brush("#255C35"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
             ButtonKind.Green => new ButtonPalette(Brush("#255C35"), Brush("#255C35"), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 12, new Thickness(12, 9)),
             ButtonKind.Dark or ButtonKind.DarkSmall or ButtonKind.ActionDark => new ButtonPalette(Brush("#142318"), Brush("#142318"), Brush(ForegroundInverse), ForegroundInverse, 12, 36, 13, new Thickness(12, 8)),
             ButtonKind.Clear => new ButtonPalette(Brush(StatusErrorBg), Brush(StatusError), Brush(StatusError), StatusError, 12, 36, 13, new Thickness(12, 8)),
@@ -2306,35 +2376,6 @@ public sealed class MainWindow : Window
             ButtonKind.Filter => new ButtonPalette(Brush(SurfaceSecondary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 999, 30, 10, new Thickness(12, 6)),
             ButtonKind.Ghost => new ButtonPalette(Brush(SurfaceTertiary), Brush(SurfaceTertiary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 32, 13, new Thickness(9, 0)),
             _ => GetButtonPalette(kind)
-        };
-    }
-
-    private static void AttachButtonHover(Button button, ButtonKind kind, bool selected)
-    {
-        if (selected || !button.IsEnabled)
-        {
-            return;
-        }
-
-        var normal = GetButtonPalette(kind);
-        var hover = ButtonHoverPalette(kind);
-        button.Transitions =
-        [
-            new BrushTransition { Property = Button.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(120) },
-            new BrushTransition { Property = Button.BorderBrushProperty, Duration = TimeSpan.FromMilliseconds(120) },
-            new BrushTransition { Property = Button.ForegroundProperty, Duration = TimeSpan.FromMilliseconds(120) }
-        ];
-        button.PointerEntered += (_, _) =>
-        {
-            button.Background = hover.Background;
-            button.BorderBrush = hover.Border;
-            button.Foreground = hover.Foreground;
-        };
-        button.PointerExited += (_, _) =>
-        {
-            button.Background = normal.Background;
-            button.BorderBrush = normal.Border;
-            button.Foreground = normal.Foreground;
         };
     }
 
