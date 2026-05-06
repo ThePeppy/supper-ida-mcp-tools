@@ -39,10 +39,11 @@ public sealed class MainWindow : Window
     private const string CodeBg = "#17231A";
     private const string CodeBorder = "#2E4233";
 
-    private static readonly FontFamily HeadingFont = new("Inter");
-    private static readonly FontFamily BodyFont = new("Inter, Geist, -apple-system, BlinkMacSystemFont, Segoe UI");
-    private static readonly FontFamily CaptionFont = new("Newsreader, Georgia");
-    private static readonly FontFamily DataFont = new("IBM Plex Mono, Menlo, Consolas, monospace");
+    private static readonly FontFamily UiFont = new("avares://SupperIdaMcp.Center.Desktop/Assets/Fonts/NotoSansSC#Noto Sans SC");
+    private static readonly FontFamily DataFont = new("avares://SupperIdaMcp.Center.Desktop/Assets/Fonts/JetBrainsMono#JetBrains Mono");
+    private static readonly FontFamily HeadingFont = UiFont;
+    private static readonly FontFamily BodyFont = UiFont;
+    private static readonly FontFamily CaptionFont = UiFont;
 
     private readonly Localizer _text = new(AppPreferencesStore.Load().Language);
     private ContentControl _pageHost = new();
@@ -50,6 +51,7 @@ public sealed class MainWindow : Window
     private CenterPage _selectedPage = CenterPage.Overview;
     private LogFilter _logFilter = LogFilter.All;
     private bool _settingsDirty = true;
+    private string _lastPageFingerprint = string.Empty;
     private string _settingsMessage = string.Empty;
 
     public MainWindow()
@@ -235,6 +237,7 @@ public sealed class MainWindow : Window
         }
 
         _selectedPage = page;
+        _lastPageFingerprint = string.Empty;
         Content = BuildLayout();
         Refresh(force: true);
     }
@@ -242,18 +245,102 @@ public sealed class MainWindow : Window
     private void Refresh(bool force = false)
     {
         _lastUpdated.Text = _text.F("updated", DateTime.Now.ToString("T", _text.Culture));
+        var fingerprint = PageFingerprint(_selectedPage);
         if (_selectedPage == CenterPage.Settings)
         {
-            if (_settingsDirty || force)
+            if (_settingsDirty || force || fingerprint != _lastPageFingerprint)
             {
                 RenderSelectedPage(force: true);
+                _lastPageFingerprint = fingerprint;
                 _settingsDirty = false;
             }
 
             return;
         }
 
-        RenderSelectedPage(force);
+        if (force || fingerprint != _lastPageFingerprint)
+        {
+            RenderSelectedPage(force);
+            _lastPageFingerprint = fingerprint;
+        }
+    }
+
+    private string PageFingerprint(CenterPage page)
+    {
+        return page switch
+        {
+            CenterPage.Overview => string.Join('|', "overview", TargetsFingerprint(), ActiveOperationsFingerprint(), LogsFingerprint(8)),
+            CenterPage.Targets => string.Join('|', "targets", TargetsFingerprint(), ActiveOperationsFingerprint()),
+            CenterPage.Activity => string.Join('|', "activity", ActiveOperationsFingerprint()),
+            CenterPage.Processes => string.Join('|', "processes", ProcessesFingerprint()),
+            CenterPage.Installations => "installations",
+            CenterPage.Logs => string.Join('|', "logs", _logFilter, LogsFingerprint(200)),
+            CenterPage.Settings => string.Join('|', "settings", _text.Language, _settingsDirty, _settingsMessage),
+            _ => page.ToString()
+        };
+    }
+
+    private static string TargetsFingerprint()
+    {
+        return string.Join(
+            ';',
+            RuntimeHolder.TargetRegistry.ListTargets()
+                .OrderBy(target => target.InstanceId, StringComparer.OrdinalIgnoreCase)
+                .Select(target => string.Join(
+                    ',',
+                    target.InstanceId,
+                    target.Alias,
+                    target.ProcessId,
+                    target.BinaryName,
+                    target.InputPath,
+                    target.DatabasePath,
+                    target.Health)));
+    }
+
+    private static string ActiveOperationsFingerprint()
+    {
+        return string.Join(
+            ';',
+            RuntimeHolder.ActiveOperations.List()
+                .OrderBy(operation => operation.OperationId, StringComparer.OrdinalIgnoreCase)
+                .Select(operation => string.Join(
+                    ',',
+                    operation.OperationId,
+                    operation.TargetInstanceId,
+                    operation.TargetAlias,
+                    operation.ToolName,
+                    operation.StartedAtUtc.UtcTicks)));
+    }
+
+    private static string LogsFingerprint(int count)
+    {
+        return string.Join(
+            ';',
+            RuntimeHolder.OperationLog.List(count)
+                .Select(log => string.Join(
+                    ',',
+                    log.TimestampUtc.UtcTicks,
+                    log.TargetInstanceId,
+                    log.TargetAlias,
+                    log.ToolName,
+                    log.Success,
+                    log.Elapsed.Ticks,
+                    log.Error)));
+    }
+
+    private static string ProcessesFingerprint()
+    {
+        return string.Join(
+            ';',
+            RuntimeHolder.IdaLaunchService.ListLaunchedProcesses()
+                .OrderBy(process => process.ProcessId)
+                .Select(process => string.Join(
+                    ',',
+                    process.ProcessId,
+                    process.ExecutablePath,
+                    process.InputPath,
+                    process.LaunchedAtUtc.UtcTicks,
+                    process.HasExited)));
     }
 
     private void RenderSelectedPage(bool force = false)
