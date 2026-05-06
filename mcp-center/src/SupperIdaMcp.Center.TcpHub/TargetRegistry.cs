@@ -54,6 +54,8 @@ public sealed class TargetRegistry
                 normalized.BinaryName,
                 normalized.InputPath,
                 normalized.DatabasePath,
+                normalized.IdaVersion,
+                normalized.Platform,
                 timestampUtc,
                 TargetHealth.Healthy);
 
@@ -113,6 +115,8 @@ public sealed class TargetRegistry
             AliasFromName(binaryName),
             IsFallbackName(current?.Alias, processId) ? null : current?.Alias,
             processId > 0 ? $"ida-{processId}" : null) ?? "ida";
+        var idaVersion = FirstUseful(incoming.IdaVersion, current?.IdaVersion);
+        var platform = FirstUseful(incoming.Platform, current?.Platform);
 
         return new TargetMetadata(
             incoming.InstanceId,
@@ -121,8 +125,8 @@ public sealed class TargetRegistry
             binaryName,
             inputPath,
             databasePath,
-            incoming.IdaVersion,
-            incoming.Platform);
+            idaVersion,
+            platform);
     }
 
     private static string? FirstUseful(params string?[] values)

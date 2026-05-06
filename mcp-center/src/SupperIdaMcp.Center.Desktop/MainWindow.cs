@@ -1,39 +1,65 @@
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SupperIdaMcp.Center.Core;
 using SupperIdaMcp.Center.Desktop.Localization;
 using SupperIdaMcp.Center.Desktop.Setup;
+using SupperIdaMcp.Center.Desktop.UI;
+using SupperIdaMcp.Center.Ida;
 
 namespace SupperIdaMcp.Center.Desktop;
 
 public sealed class MainWindow : Window
 {
+    private const string SurfacePrimary = "#FFFFFF";
+    private const string SurfaceSecondary = "#F4F5F5";
+    private const string SurfaceRaised = "#FAFBFA";
+    private const string SurfaceTertiary = "#ECEFEC";
+    private const string SurfaceInverse = "#1E3322";
+    private const string ForegroundPrimary = "#1E3322";
+    private const string ForegroundSecondary = "#5F6F61";
+    private const string ForegroundMuted = "#808A80";
+    private const string ForegroundInverse = "#FFFFFF";
+    private const string BorderSubtle = "#DDE3DD";
+    private const string AccentPrimary = "#2D6B3F";
+    private const string AccentBlue = "#2563EB";
+    private const string StatusOnline = "#238636";
+    private const string StatusOnlineBg = "#E8F4EA";
+    private const string StatusWarning = "#B7791F";
+    private const string StatusWarningBg = "#FFF6DF";
+    private const string StatusError = "#C93C37";
+    private const string StatusErrorBg = "#FDECEB";
+    private const string CodeBg = "#17231A";
+    private const string CodeBorder = "#2E4233";
+
+    private static readonly FontFamily HeadingFont = new("Inter");
+    private static readonly FontFamily BodyFont = new("Inter, Geist, -apple-system, BlinkMacSystemFont, Segoe UI");
+    private static readonly FontFamily CaptionFont = new("Newsreader, Georgia");
+    private static readonly FontFamily DataFont = new("IBM Plex Mono, Menlo, Consolas, monospace");
+
     private readonly Localizer _text = new(AppPreferencesStore.Load().Language);
-    private StackPanel _targets = Panel(10);
-    private StackPanel _activity = Panel(10);
-    private StackPanel _processes = Panel(10);
-    private StackPanel _installations = Panel(10);
-    private StackPanel _logs = Panel(10);
-    private StackPanel _settings = Panel(14);
-    private TextBlock _status = new();
+    private ContentControl _pageHost = new();
+    private TextBlock _lastUpdated = new();
+    private CenterPage _selectedPage = CenterPage.Overview;
+    private LogFilter _logFilter = LogFilter.All;
     private bool _settingsDirty = true;
-    private int _selectedTabIndex;
     private string _settingsMessage = string.Empty;
 
     public MainWindow()
     {
         Title = _text.T("app.title");
-        Width = 1120;
-        Height = 760;
-        MinWidth = 920;
-        MinHeight = 620;
-        Background = Brush("#F5F7FB");
+        Width = 1280;
+        Height = 820;
+        MinWidth = 1120;
+        MinHeight = 720;
+        Background = Brush(SurfacePrimary);
 
         RuntimeHolder.Start();
         Content = BuildLayout();
@@ -41,7 +67,7 @@ public sealed class MainWindow : Window
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         timer.Tick += (_, _) => Refresh();
         timer.Start();
-        Refresh();
+        Refresh(force: true);
     }
 
     private Control BuildLayout()
@@ -50,147 +76,1123 @@ public sealed class MainWindow : Window
 
         var root = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*"),
-            Background = Brush("#F5F7FB")
+            ColumnDefinitions = new ColumnDefinitions("224,*"),
+            Background = Brush(SurfacePrimary)
         };
 
-        root.Children.Add(BuildHeader());
+        root.Children.Add(BuildSidebar());
 
-        var tabs = new TabControl
-        {
-            Margin = new Thickness(22, 12, 22, 20),
-            FontSize = 14,
-            Items =
-            {
-                Tab(_text.T("tab.targets"), Wrap(_targets)),
-                Tab(_text.T("tab.activity"), Wrap(_activity)),
-                Tab(_text.T("tab.processes"), Wrap(_processes)),
-                Tab(_text.T("tab.installations"), Wrap(_installations)),
-                Tab(_text.T("tab.logs"), Wrap(_logs)),
-                Tab(_text.T("tab.settings"), Wrap(_settings))
-            }
-        };
-        tabs.SelectedIndex = Math.Clamp(_selectedTabIndex, 0, 5);
-        tabs.SelectionChanged += (_, _) => _selectedTabIndex = tabs.SelectedIndex;
-        Grid.SetRow(tabs, 1);
-        root.Children.Add(tabs);
+        _pageHost = new ContentControl();
+        Grid.SetColumn(_pageHost, 1);
+        root.Children.Add(_pageHost);
 
+        RenderSelectedPage(force: true);
         return root;
     }
 
-    private Control BuildHeader()
+    private Control BuildSidebar()
     {
-        var header = new Border
+        var sidebar = new StackPanel
         {
-            Background = Brushes.White,
-            BorderBrush = Brush("#E4E7EC"),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(24, 18)
-        };
-
-        var layout = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto")
-        };
-
-        var title = new TextBlock
-        {
-            Text = _text.T("app.title"),
-            FontSize = 26,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("#101828")
-        };
-        var subtitle = new TextBlock
-        {
-            Text = _text.T("app.subtitle"),
-            FontSize = 13,
-            Foreground = Brush("#667085")
-        };
-        var endpoints = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children =
-            {
-                Chip($"MCP  {RuntimeHolder.McpEndpoint}", RowKind.Info),
-                Chip($"TCP  {RuntimeHolder.TcpEndpoint}", RowKind.Neutral)
-            }
-        };
-
-        layout.Children.Add(new StackPanel
-        {
-            Spacing = 2,
-            Children = { title, subtitle, endpoints }
-        });
-
-        _status = new TextBlock
-        {
-            Text = _text.F("updated", DateTime.Now.ToString("T", _text.Culture)),
-            FontSize = 12,
-            FontWeight = FontWeight.Medium
-        };
-        var right = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
             Spacing = 12,
-            VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                Chip(_status, RowKind.Neutral),
-                LanguageSwitch()
+                BuildIdentity(),
+                BuildNavigation(),
+                new Border { Height = 1, Background = Brush(BorderSubtle), Opacity = 0.55 },
+                BuildRuntimeCard(),
+                new Border { Height = double.NaN, VerticalAlignment = VerticalAlignment.Stretch },
+                BuildBridgeStatusCard()
             }
         };
-        Grid.SetColumn(right, 1);
-        layout.Children.Add(right);
 
-        header.Child = layout;
-        return header;
+        return new Border
+        {
+            Width = 224,
+            Padding = new Thickness(14, 10),
+            Background = Brush(SurfaceSecondary),
+            Child = sidebar
+        };
     }
 
-    private Control LanguageSwitch()
+    private Control BuildIdentity()
     {
-        var box = new Border
+        return new Grid
         {
-            Background = Brush("#F2F4F7"),
-            BorderBrush = Brush("#D0D5DD"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(3),
-            Child = new StackPanel
+            ColumnDefinitions = new ColumnDefinitions("30,*"),
+            Height = 42,
+            ColumnSpacing = 9,
+            Children =
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 3,
+                new Border
+                {
+                    Width = 30,
+                    Height = 30,
+                    CornerRadius = new CornerRadius(8),
+                    Background = Brush(SurfaceInverse),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = CenteredText("S", 14, FontWeight.Bold, ForegroundInverse, HeadingFont)
+                },
+                Stack(Orientation.Vertical, 1,
+                    Text(_text.T("brand.title"), 14, FontWeight.SemiBold, ForegroundPrimary, HeadingFont),
+                    Text(_text.T("brand.subtitle"), 11, FontWeight.Normal, ForegroundMuted))
+            }
+        }.WithColumn(1, childIndex: 1);
+    }
+
+    private Control BuildNavigation()
+    {
+        var panel = Stack(Orientation.Vertical, 3);
+        foreach (var page in Enum.GetValues<CenterPage>())
+        {
+            panel.Children.Add(NavButton(page));
+        }
+
+        return panel;
+    }
+
+    private Control NavButton(CenterPage page)
+    {
+        var selected = _selectedPage == page;
+        var button = new Button
+        {
+            Height = 32,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(9, 0),
+            Background = selected ? Brush(SurfacePrimary) : Brushes.Transparent,
+            Foreground = selected ? Brush(ForegroundPrimary) : Brush(ForegroundSecondary),
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Content = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("16,*"),
+                ColumnSpacing = 10,
+                VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    SegmentButton(_text.T("language.chinese"), AppLanguage.Chinese),
-                    SegmentButton(_text.T("language.english"), AppLanguage.English)
+                    CenteredText(NavGlyph(page), 12, FontWeight.SemiBold, selected ? AccentPrimary : ForegroundMuted, DataFont),
+                    Text(PageTitle(page), 13, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundSecondary)
+                        .WithColumn(1)
                 }
             }
         };
-        return box;
+        button.Click += (_, _) => SelectPage(page);
+        AttachButtonHover(button, selected ? ButtonKind.Selected : ButtonKind.Ghost, selected);
+        return button;
     }
 
-    private Button SegmentButton(string label, AppLanguage language)
+    private Control BuildRuntimeCard()
+    {
+        var targets = RuntimeHolder.TargetRegistry.ListTargets();
+        var healthy = targets.Count(target => target.Health == TargetHealth.Healthy);
+        var active = RuntimeHolder.ActiveOperations.List().Count;
+
+        return SectionCard(
+            Stack(Orientation.Vertical, 10,
+                Text(_text.T("sidebar.runtime"), 12, FontWeight.Normal, ForegroundMuted, CaptionFont),
+                RuntimeLine(_text.T("sidebar.mcp"), RuntimeHolder.IsRunning ? _text.T("status.live") : _text.T("status.offline"), StatusOnline),
+                RuntimeLine(_text.T("sidebar.idaTcp"), $"{healthy}/{targets.Count}", targets.Count == 0 ? ForegroundMuted : StatusOnline),
+                RuntimeLine(_text.T("sidebar.agent"), active == 0 ? _text.T("status.idle") : _text.F("status.busyCount", active), active == 0 ? StatusWarning : AccentBlue)),
+            padding: new Thickness(12));
+    }
+
+    private Control RuntimeLine(string label, string value, string color)
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 8,
+            Children =
+            {
+                Dot(color).WithColumn(0),
+                Text(label, 11, FontWeight.Normal, ForegroundSecondary).WithColumn(1),
+                Text(value, 10, FontWeight.Medium, color, DataFont).WithColumn(2)
+            }
+        };
+    }
+
+    private Control BuildBridgeStatusCard()
+    {
+        return SectionCard(
+            Stack(Orientation.Vertical, 6,
+                Stack(Orientation.Horizontal, 7,
+                    Dot(StatusOnline),
+                    Text(_text.T("sidebar.bridgeConfigured"), 11, FontWeight.Normal, ForegroundPrimary)),
+                Text(_text.T("sidebar.bridgeMeta"), 10, FontWeight.Normal, ForegroundMuted, DataFont)),
+            padding: new Thickness(10));
+    }
+
+    private void SelectPage(CenterPage page)
+    {
+        if (_selectedPage == page)
+        {
+            return;
+        }
+
+        _selectedPage = page;
+        Content = BuildLayout();
+        Refresh(force: true);
+    }
+
+    private void Refresh(bool force = false)
+    {
+        _lastUpdated.Text = _text.F("updated", DateTime.Now.ToString("T", _text.Culture));
+        if (_selectedPage == CenterPage.Settings)
+        {
+            if (_settingsDirty || force)
+            {
+                RenderSelectedPage(force: true);
+                _settingsDirty = false;
+            }
+
+            return;
+        }
+
+        RenderSelectedPage(force);
+    }
+
+    private void RenderSelectedPage(bool force = false)
+    {
+        _pageHost.Content = _selectedPage switch
+        {
+            CenterPage.Overview => BuildOverviewPage(),
+            CenterPage.Targets => BuildTargetsPage(),
+            CenterPage.Activity => BuildActivityPage(),
+            CenterPage.Processes => BuildProcessesPage(),
+            CenterPage.Installations => BuildInstallationsPage(),
+            CenterPage.Logs => BuildLogsPage(),
+            CenterPage.Settings => BuildSettingsPage(),
+            _ => BuildOverviewPage()
+        };
+    }
+
+    private Control BuildOverviewPage()
+    {
+        var targets = RuntimeHolder.TargetRegistry.ListTargets()
+            .OrderBy(target => target.BinaryName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var healthy = targets.Count(target => target.Health == TargetHealth.Healthy);
+        var activeOps = RuntimeHolder.ActiveOperations.List().Count;
+        var logs = RuntimeHolder.OperationLog.List(8).ToArray();
+        var errors = logs.Count(log => !log.Success);
+
+        var primaryColumn = Stack(Orientation.Vertical, 14,
+            BuildServiceSummary(targets.Length, healthy, activeOps),
+            BuildOverviewMetricGrid(targets.Length, healthy, RuntimeHolder.ToolCatalog.ListTools().Count, activeOps),
+            BuildOverviewWarning(errors));
+
+        var secondaryColumn = Stack(Orientation.Vertical, 14,
+            BuildConnectedSummary(targets.Take(3).ToArray()),
+            BuildRecentActivity(logs),
+            BuildSmallEmptyState(_text.T("overview.emptyTitle"), _text.T("overview.emptyBody")));
+
+        var contentGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("1.25*,0.9*"),
+            ColumnSpacing = 14,
+            Children =
+            {
+                primaryColumn.WithColumn(0),
+                secondaryColumn.WithColumn(1)
+            }
+        };
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.overview.title"),
+                _text.T("page.overview.subtitle"),
+                ToolbarEndpointControls(includeSettings: false)),
+            new Border
+            {
+                Padding = new Thickness(18, 14, 18, 18),
+                Background = Brush(SurfacePrimary),
+                Child = contentGrid
+            });
+    }
+
+    private Control BuildServiceSummary(int targetCount, int healthy, int activeOps)
+    {
+        var statusText = RuntimeHolder.IsRunning ? _text.T("overview.serverOnline") : _text.T("overview.serverOffline");
+        var badgeText = RuntimeHolder.IsRunning ? _text.T("status.normal") : _text.T("status.error");
+        var badgeKind = RuntimeHolder.IsRunning ? RowKind.Success : RowKind.Danger;
+
+        var restart = ActionButton(_text.T("button.restartBridge"), () =>
+        {
+            _settingsMessage = _text.T("action.restartBridgeHint");
+            _settingsDirty = true;
+            return Task.CompletedTask;
+        }, ButtonKind.Light);
+
+        return new Border
+        {
+            Height = 252,
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(18),
+            Background = Brush(SurfaceInverse),
+            Child = Stack(Orientation.Vertical, 14,
+                new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    Children =
+                    {
+                        Stack(Orientation.Vertical, 5,
+                            Text(_text.T("overview.serviceStatus"), 11, FontWeight.Normal, "#B6C4B8", CaptionFont),
+                            Text(statusText, 26, FontWeight.Bold, ForegroundInverse, HeadingFont),
+                            Text(_text.T("overview.serviceBody"), 12, FontWeight.Normal, "#DDE9DF"))
+                            .WithColumn(0),
+                        Chip(badgeText, badgeKind).WithColumn(1)
+                    }
+                },
+                Stack(Orientation.Horizontal, 8,
+                    SummaryPill(_text.T("overview.port"), DesktopSettings.Current.McpPort.ToString(), dark: true),
+                    SummaryPill(_text.T("overview.latency"), _text.T("overview.localLatency"), dark: true),
+                    SummaryPill(_text.T("overview.queue"), activeOps.ToString(), dark: true)),
+                new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    Children =
+                    {
+                        Stack(Orientation.Vertical, 4,
+                            Text(_text.T("overview.activeEndpoint"), 11, FontWeight.Normal, "#B6C4B8", CaptionFont),
+                            Text(RuntimeHolder.McpEndpoint, 12, FontWeight.Normal, "#DDE9DF", DataFont))
+                            .WithColumn(0),
+                        restart.WithColumn(1)
+                    }
+                },
+                Text(_text.F("overview.connectedSummary", healthy, targetCount), 12, FontWeight.Normal, "#B6C4B8"))
+        };
+    }
+
+    private Control BuildOverviewMetricGrid(int targets, int healthy, int tools, int activeOps)
+    {
+        var grid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            RowSpacing = 10,
+            ColumnSpacing = 10
+        };
+
+        grid.Children.Add(OverviewMetric(_text.T("overview.metricMcp"), RuntimeHolder.IsRunning ? _text.T("status.online") : _text.T("status.offline"), _text.T("overview.metricMcpBody"), RowKind.Success).At(0, 0));
+        grid.Children.Add(OverviewMetric(_text.T("overview.metricBridge"), _text.F("overview.windowsCount", healthy), _text.F("overview.lastHeartbeat", BestHeartbeat()), RowKind.Success).At(0, 1));
+        grid.Children.Add(OverviewMetric(_text.T("overview.metricTools"), tools.ToString(), _text.T("overview.metricToolsBody"), RowKind.Warning).At(1, 0));
+        grid.Children.Add(OverviewMetric(_text.T("overview.metricCalls"), activeOps == 0 ? _text.T("status.idle") : activeOps.ToString(), _text.T("overview.metricCallsBody"), RowKind.Neutral).At(1, 1));
+        return grid;
+    }
+
+    private Control BuildOverviewWarning(int errorCount)
+    {
+        var hasErrors = errorCount > 0;
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(16),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Horizontal, 12,
+                BadgeIcon(hasErrors ? "!" : "i", hasErrors ? RowKind.Warning : RowKind.Info),
+                Stack(Orientation.Vertical, 6,
+                    Text(hasErrors ? _text.T("overview.errorTitle") : _text.T("overview.readyTitle"), 14, FontWeight.Bold, ForegroundPrimary, HeadingFont),
+                    Text(hasErrors ? _text.F("overview.errorBody", errorCount) : _text.T("overview.readyBody"), 12, FontWeight.Normal, ForegroundSecondary)
+                        .Wrap(),
+                    ActionButton(_text.T("button.openTrace"), () =>
+                    {
+                        SelectPage(CenterPage.Logs);
+                        return Task.CompletedTask;
+                    }, ButtonKind.DarkSmall)))
+        };
+    }
+
+    private Control BuildConnectedSummary(IReadOnlyCollection<TargetInfo> targets)
+    {
+        var panel = Stack(Orientation.Vertical, 12,
+            HeaderRow(_text.T("overview.connectedTitle"), _text.T("status.active")));
+
+        if (targets.Count == 0)
+        {
+            panel.Children.Add(Text(_text.T("empty.targets"), 12, FontWeight.Normal, ForegroundSecondary).Wrap());
+        }
+        else
+        {
+            foreach (var target in targets)
+            {
+                panel.Children.Add(TargetSummaryLine(target));
+            }
+        }
+
+        return Card(panel, height: 220);
+    }
+
+    private Control TargetSummaryLine(TargetInfo target)
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Children =
+            {
+                Stack(Orientation.Vertical, 3,
+                    Text(TargetTitle(target), 12, FontWeight.SemiBold, ForegroundPrimary, DataFont).Ellipsis(),
+                    Text(CompactPath(target.InputPath ?? target.DatabasePath), 11, FontWeight.Normal, ForegroundMuted).Ellipsis())
+                    .WithColumn(0),
+                HealthBadge(target.Health).WithColumn(1)
+            }
+        };
+    }
+
+    private Control BuildRecentActivity(IReadOnlyCollection<OperationLogEntry> logs)
+    {
+        var panel = Stack(Orientation.Vertical, 10,
+            HeaderRow(_text.T("overview.recentTitle"), _text.T("status.recent")));
+
+        if (logs.Count == 0)
+        {
+            panel.Children.Add(Text(_text.T("empty.logs"), 12, FontWeight.Normal, ForegroundSecondary));
+        }
+        else
+        {
+            foreach (var log in logs.Take(5))
+            {
+                panel.Children.Add(LogMiniRow(log));
+            }
+        }
+
+        return Card(panel);
+    }
+
+    private Control LogMiniRow(OperationLogEntry log)
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("58,42,*"),
+            ColumnSpacing = 8,
+            Children =
+            {
+                Text(log.TimestampUtc.LocalDateTime.ToString("HH:mm:ss", _text.Culture), 11, FontWeight.Normal, ForegroundMuted, DataFont).WithColumn(0),
+                Text(log.Success ? "OK" : "ERR", 11, FontWeight.SemiBold, log.Success ? StatusOnline : StatusError, DataFont).WithColumn(1),
+                Text($"{log.TargetAlias} / {log.ToolName}", 11, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis().WithColumn(2)
+            }
+        };
+    }
+
+    private Control BuildSmallEmptyState(string title, string body)
+    {
+        return Card(
+            Stack(Orientation.Horizontal, 12,
+                BadgeIcon("-", RowKind.Neutral),
+                Stack(Orientation.Vertical, 4,
+                    Text(title, 13, FontWeight.SemiBold, ForegroundPrimary),
+                    Text(body, 11, FontWeight.Normal, ForegroundSecondary).Wrap())),
+            height: 96);
+    }
+
+    private Control BuildTargetsPage()
+    {
+        var targets = RuntimeHolder.TargetRegistry.ListTargets()
+            .OrderBy(target => target.Health == TargetHealth.Healthy ? 0 : 1)
+            .ThenBy(target => TargetTitle(target), StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var activeOps = RuntimeHolder.ActiveOperations.List().ToArray();
+        var healthy = targets.Count(target => target.Health == TargetHealth.Healthy);
+        var warning = targets.Count(target => target.Health is TargetHealth.Unreachable or TargetHealth.Unknown);
+
+        var content = Stack(Orientation.Vertical, 14,
+            BuildTargetsMetrics(targets.Length, healthy, warning, activeOps.FirstOrDefault()?.TargetAlias),
+            BuildTargetsTable(targets, activeOps));
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.targets.title"),
+                _text.T("page.targets.subtitle"),
+                Stack(Orientation.Horizontal, 8,
+                    SearchPlaceholder(_text.T("search.targets"), 260),
+                    SegmentedStatusFilters(),
+                    ActionButton(_text.T("button.refreshMetadata"), RefreshAllMetadataAsync, ButtonKind.Dark))),
+            new Border
+            {
+                Padding = new Thickness(20),
+                Background = Brush(SurfacePrimary),
+                Child = content
+            });
+    }
+
+    private Control BuildTargetsMetrics(int total, int healthy, int warning, string? activeAlias)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*,1.15*"),
+            ColumnSpacing = 12,
+            Height = 92,
+            Children =
+            {
+                MetricCard(_text.T("targets.metric.connected"), total.ToString(), ForegroundPrimary).WithColumn(0),
+                MetricCard(_text.T("targets.metric.online"), healthy.ToString(), StatusOnline).WithColumn(1),
+                MetricCard(_text.T("targets.metric.timeouts"), warning.ToString(), StatusWarning).WithColumn(2),
+                MetricCard(_text.T("targets.metric.activeAgent"), string.IsNullOrWhiteSpace(activeAlias) ? _text.T("status.idle") : activeAlias, ForegroundInverse, dark: true).WithColumn(3)
+            }
+        };
+        return grid;
+    }
+
+    private Control BuildTargetsTable(IReadOnlyCollection<TargetInfo> targets, IReadOnlyCollection<ActiveOperation> activeOps)
+    {
+        var body = Stack(Orientation.Vertical, 6);
+        if (targets.Count == 0)
+        {
+            body.Children.Add(EmptyState(_text.T("empty.targets"), _text.T("empty.targetsBody")));
+        }
+        else
+        {
+            foreach (var target in targets)
+            {
+                body.Children.Add(TargetTableRow(target, activeOps.Any(op => op.TargetInstanceId == target.InstanceId)));
+            }
+        }
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Vertical, 8,
+                HeaderRow(_text.T("targets.table.title"), _text.F("targets.table.summary", targets.Count)),
+                TargetTableHeader(),
+                body)
+        };
+    }
+
+    private Control TargetTableHeader()
+    {
+        var grid = TargetGrid();
+        AddTargetCell(grid, _text.T("table.file"), 0, isHeader: true);
+        AddTargetCell(grid, _text.T("table.alias"), 1, isHeader: true);
+        AddTargetCell(grid, "PID", 2, isHeader: true);
+        AddTargetCell(grid, _text.T("table.platform"), 3, isHeader: true);
+        AddTargetCell(grid, _text.T("table.path"), 4, isHeader: true);
+        AddTargetCell(grid, _text.T("table.idb"), 5, isHeader: true);
+        AddTargetCell(grid, _text.T("table.heartbeat"), 6, isHeader: true);
+        AddTargetCell(grid, _text.T("table.health"), 7, isHeader: true);
+        AddTargetCell(grid, _text.T("table.actions"), 8, isHeader: true);
+
+        return new Border
+        {
+            Height = 28,
+            Padding = new Thickness(8, 0),
+            Child = grid
+        };
+    }
+
+    private Control TargetTableRow(TargetInfo target, bool active)
+    {
+        var grid = TargetGrid();
+        AddTargetCell(grid, TargetTitle(target), 0, strong: true, font: DataFont);
+        AddTargetCell(grid, target.Alias, 1, font: DataFont);
+        AddTargetCell(grid, target.ProcessId.ToString(), 2, font: DataFont);
+        AddTargetCell(grid, CompactPlatform(target), 3, font: DataFont);
+        AddTargetCell(grid, CompactPath(target.InputPath), 4, font: DataFont, tooltip: target.InputPath);
+        AddTargetCell(grid, CompactPath(target.DatabasePath), 5, font: DataFont, tooltip: target.DatabasePath);
+        AddTargetCell(grid, LastSeen(target.LastSeenUtc), 6, font: DataFont, color: target.Health == TargetHealth.Healthy ? ForegroundSecondary : StatusWarning);
+        grid.Children.Add(HealthBadge(target.Health).WithColumn(7));
+        grid.Children.Add(TargetActions(target).WithColumn(8));
+
+        return new Border
+        {
+            MinHeight = 62,
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(8, 10),
+            Background = Brush(active ? SurfaceRaised : SurfacePrimary),
+            BorderBrush = Brush(active ? AccentPrimary : SurfacePrimary),
+            BorderThickness = active ? new Thickness(1) : new Thickness(0),
+            Child = grid,
+            Transitions =
+            [
+                new BrushTransition { Property = Border.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(120) },
+                new BrushTransition { Property = Border.BorderBrushProperty, Duration = TimeSpan.FromMilliseconds(120) }
+            ]
+        }.WithHover(Brush(SurfaceRaised), Brush(active ? AccentPrimary : BorderSubtle));
+    }
+
+    private Grid TargetGrid()
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("1.18*,0.82*,56,82,1.28*,1.18*,82,92,214"),
+            ColumnSpacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
+    private void AddTargetCell(
+        Grid grid,
+        string text,
+        int column,
+        bool isHeader = false,
+        bool strong = false,
+        FontFamily? font = null,
+        string? color = null,
+        string? tooltip = null)
+    {
+        var block = Text(
+            string.IsNullOrWhiteSpace(text) ? "-" : text,
+            isHeader ? 10 : 11,
+            isHeader || strong ? FontWeight.SemiBold : FontWeight.Normal,
+            color ?? (isHeader ? ForegroundMuted : ForegroundPrimary),
+            font ?? (isHeader ? CaptionFont : BodyFont))
+            .Ellipsis();
+
+        if (!string.IsNullOrWhiteSpace(tooltip))
+        {
+            ToolTip.SetTip(block, tooltip);
+        }
+
+        grid.Children.Add(block.WithColumn(column));
+    }
+
+    private Control TargetActions(TargetInfo target)
+    {
+        return Stack(Orientation.Horizontal, 5,
+            MiniButton(_text.T("button.ping"), () => CallTargetToolAsync("ida_ping_target", target.InstanceId, _text.T("action.pingSent"))),
+            MiniButton(_text.T("button.refreshShort"), () => CallTargetToolAsync("ida_get_metadata", target.InstanceId, _text.T("action.metadataRefreshed"))),
+            MiniButton(_text.T("button.openShort"), () => OpenTargetInIdaAsync(target), enabled: !string.IsNullOrWhiteSpace(target.InputPath)),
+            MiniButton(_text.T("button.close"), () => CallTargetCloseAsync(target), kind: ButtonKind.DangerMini));
+    }
+
+    private Control BuildActivityPage()
+    {
+        var operations = RuntimeHolder.ActiveOperations.List()
+            .OrderBy(operation => operation.StartedAtUtc)
+            .ToArray();
+
+        var content = operations.Length == 0
+            ? EmptyState(_text.T("empty.activity"), _text.T("empty.activityBody"))
+            : ActiveOperationsTable(operations);
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.activity.title"),
+                _text.T("page.activity.subtitle"),
+                ToolbarEndpointControls(includeSettings: false)),
+            PagePadding(content));
+    }
+
+    private Control ActiveOperationsTable(IReadOnlyCollection<ActiveOperation> operations)
+    {
+        var rows = Stack(Orientation.Vertical, 6);
+        foreach (var operation in operations)
+        {
+            rows.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(12),
+                Background = Brush(SurfacePrimary),
+                Padding = new Thickness(12),
+                Child = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("1.2*,1.4*,1*,0.8*"),
+                    ColumnSpacing = 12,
+                    Children =
+                    {
+                        Text(operation.TargetAlias, 12, FontWeight.SemiBold, ForegroundPrimary, DataFont).Ellipsis().WithColumn(0),
+                        Text(operation.ToolName, 12, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis().WithColumn(1),
+                        Text(operation.StartedAtUtc.LocalDateTime.ToString("HH:mm:ss", _text.Culture), 12, FontWeight.Normal, ForegroundSecondary, DataFont).WithColumn(2),
+                        Chip(_text.T("status.running"), RowKind.Info).WithColumn(3)
+                    }
+                }
+            });
+        }
+
+        return PanelCard(_text.T("activity.table.title"), _text.F("activity.table.summary", operations.Count), rows);
+    }
+
+    private Control BuildProcessesPage()
+    {
+        var processes = RuntimeHolder.IdaLaunchService.ListLaunchedProcesses()
+            .OrderByDescending(process => process.LaunchedAtUtc)
+            .ToArray();
+
+        var body = Stack(Orientation.Vertical, 6);
+        if (processes.Length == 0)
+        {
+            body.Children.Add(EmptyState(_text.T("empty.processes"), _text.T("empty.processesBody")));
+        }
+        else
+        {
+            foreach (var process in processes)
+            {
+                body.Children.Add(ProcessRow(process));
+            }
+        }
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.processes.title"),
+                _text.T("page.processes.subtitle"),
+                ToolbarEndpointControls(includeSettings: false)),
+            PagePadding(PanelCard(_text.T("processes.table.title"), _text.F("processes.table.summary", processes.Length), body)));
+    }
+
+    private Control ProcessRow(LaunchedIdaProcess process)
+    {
+        var hasExited = process.HasExited;
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = Brush(SurfacePrimary),
+            Padding = new Thickness(12),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("80,1.2*,1.2*,110,110"),
+                ColumnSpacing = 12,
+                Children =
+                {
+                    Text($"PID {process.ProcessId}", 12, FontWeight.SemiBold, ForegroundPrimary, DataFont).WithColumn(0),
+                    Text(CompactPath(process.InputPath), 12, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis().WithColumn(1),
+                    Text(CompactPath(process.ExecutablePath), 12, FontWeight.Normal, ForegroundSecondary, DataFont).Ellipsis().WithColumn(2),
+                    Text(process.LaunchedAtUtc.LocalDateTime.ToString("HH:mm:ss", _text.Culture), 12, FontWeight.Normal, ForegroundMuted, DataFont).WithColumn(3),
+                    Chip(hasExited ? _text.T("status.exited") : _text.T("status.running"), hasExited ? RowKind.Neutral : RowKind.Success).WithColumn(4)
+                }
+            }
+        };
+    }
+
+    private Control BuildInstallationsPage()
+    {
+        var installations = RuntimeHolder.IdaLocator.FindInstallations().ToArray();
+        var body = Stack(Orientation.Vertical, 6);
+        if (installations.Length == 0)
+        {
+            body.Children.Add(EmptyState(_text.T("empty.installations"), _text.T("empty.installationsBody")));
+        }
+        else
+        {
+            foreach (var install in installations)
+            {
+                body.Children.Add(InstallRow(install));
+            }
+        }
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.installations.title"),
+                _text.T("page.installations.subtitle"),
+                ToolbarEndpointControls(includeSettings: false)),
+            PagePadding(PanelCard(_text.T("installations.table.title"), _text.F("installations.table.summary", installations.Count(i => i.Exists), installations.Length), body)));
+    }
+
+    private Control InstallRow(IdaInstall install)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = Brush(SurfacePrimary),
+            Padding = new Thickness(12),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("1*,1.6*,1*,110"),
+                ColumnSpacing = 12,
+                Children =
+                {
+                    Text(install.DisplayName, 12, FontWeight.SemiBold, ForegroundPrimary, DataFont).Ellipsis().WithColumn(0),
+                    Text(CompactPath(install.Path), 12, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis().WithColumn(1),
+                    Text(install.Source, 12, FontWeight.Normal, ForegroundSecondary).Ellipsis().WithColumn(2),
+                    Chip(install.Exists ? _text.T("status.exists") : _text.T("status.missing"), install.Exists ? RowKind.Success : RowKind.Warning).WithColumn(3)
+                }
+            }
+        };
+    }
+
+    private Control BuildLogsPage()
+    {
+        var logs = RuntimeHolder.OperationLog.List(200)
+            .Where(MatchesLogFilter)
+            .ToArray();
+        var latestError = RuntimeHolder.OperationLog.List(200).FirstOrDefault(log => !log.Success);
+        var body = logs.Length == 0
+            ? EmptyState(_text.T("empty.logs"), _text.T("empty.logsBody"))
+            : BuildLogRows(logs);
+
+        var content = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,300"),
+            ColumnSpacing = 14,
+            Children =
+            {
+                PanelCard(_text.T("logs.stream.title"), _text.T("logs.stream.summary"), body).WithColumn(0),
+                BuildLogSidePanel(latestError).WithColumn(1)
+            }
+        };
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.logs.title"),
+                _text.T("page.logs.subtitle"),
+                Stack(Orientation.Horizontal, 8,
+                    SearchPlaceholder(_text.T("search.logs"), 250),
+                    ActionButton(_text.T("button.copy"), CopyLogsAsync, ButtonKind.DarkSmall),
+                    ActionButton(_text.T("button.clear"), () =>
+                    {
+                        _settingsMessage = _text.T("action.clearLogUnavailable");
+                        return Task.CompletedTask;
+                    }, ButtonKind.DangerMini))),
+            new Border
+            {
+                Padding = new Thickness(16),
+                Background = Brush(SurfacePrimary),
+                Child = Stack(Orientation.Vertical, 14, BuildLogFilters(), content)
+            });
+    }
+
+    private Control BuildLogFilters()
+    {
+        return Stack(Orientation.Horizontal, 8,
+            Text(_text.T("logs.filters"), 13, FontWeight.Normal, ForegroundMuted, CaptionFont),
+            LogFilterButton(LogFilter.All, "All"),
+            LogFilterButton(LogFilter.Mcp, "MCP"),
+            LogFilterButton(LogFilter.IdaTcp, "IDA TCP"),
+            LogFilterButton(LogFilter.Plugin, "Plugin"),
+            LogFilterButton(LogFilter.Agent, "Agent"),
+            LogFilterButton(LogFilter.Error, "Error"));
+    }
+
+    private Control LogFilterButton(LogFilter filter, string label)
+    {
+        var selected = _logFilter == filter;
+        var kind = filter == LogFilter.Error ? ButtonKind.DangerMini : selected ? ButtonKind.FilterSelected : ButtonKind.Filter;
+        return ActionButton(label, () =>
+        {
+            _logFilter = filter;
+            RenderSelectedPage(force: true);
+            return Task.CompletedTask;
+        }, kind);
+    }
+
+    private Control BuildLogRows(IReadOnlyCollection<OperationLogEntry> logs)
+    {
+        var rows = Stack(Orientation.Vertical, 6);
+        rows.Children.Add(LogHeaderRow());
+        foreach (var log in logs.Take(120))
+        {
+            rows.Children.Add(LogRow(log));
+        }
+
+        return rows;
+    }
+
+    private Control LogHeaderRow()
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = Brush(SurfaceTertiary),
+            Padding = new Thickness(10, 8),
+            Child = LogGrid(
+                Text("Time", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text("Level", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text("Source", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text("Target", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text("Message", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont))
+        };
+    }
+
+    private Control LogRow(OperationLogEntry log)
+    {
+        var success = log.Success;
+        var row = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = Brush(success ? SurfacePrimary : StatusErrorBg),
+            BorderBrush = Brush(success ? SurfacePrimary : StatusError),
+            BorderThickness = success ? new Thickness(0) : new Thickness(1),
+            Padding = new Thickness(10, 8),
+            Child = LogGrid(
+                Text(log.TimestampUtc.LocalDateTime.ToString("HH:mm:ss", _text.Culture), 11, FontWeight.Normal, ForegroundMuted, DataFont),
+                Text(success ? "INFO" : "ERROR", 11, FontWeight.SemiBold, success ? ForegroundSecondary : StatusError, DataFont),
+                Text(LogSource(log), 11, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis(),
+                Text(log.TargetAlias, 11, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis(),
+                Text(success ? $"{log.ToolName} completed in {log.Elapsed.TotalMilliseconds:0} ms" : log.Error ?? log.ToolName, 11, FontWeight.Normal, success ? ForegroundPrimary : StatusError, DataFont).Ellipsis())
+        };
+
+        return row;
+    }
+
+    private Grid LogGrid(params Control[] children)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("72,58,86,130,*"),
+            ColumnSpacing = 10,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        for (var i = 0; i < children.Length; i++)
+        {
+            grid.Children.Add(children[i].WithColumn(i));
+        }
+
+        return grid;
+    }
+
+    private Control BuildLogSidePanel(OperationLogEntry? latestError)
+    {
+        var errorTile = latestError is null
+            ? StateTile(_text.T("logs.noErrorTitle"), _text.T("logs.noErrorBody"), RowKind.Success)
+            : StateTile(_text.T("logs.latestError"), latestError.Error ?? latestError.ToolName, RowKind.Danger);
+
+        var logs = RuntimeHolder.OperationLog.List(200).ToArray();
+        return Stack(Orientation.Vertical, 14,
+            errorTile,
+            StateTile(_text.T("logs.emptyStateTitle"), _text.T("logs.emptyStateBody"), RowKind.Neutral),
+            new Border
+            {
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(12),
+                Background = Brush(SurfaceInverse),
+                Child = Stack(Orientation.Vertical, 8,
+                    Text(_text.T("logs.sessionSummary"), 12, FontWeight.Normal, "#B6C4B8", CaptionFont),
+                    Text(logs.Length.ToString(), 28, FontWeight.Bold, ForegroundInverse, DataFont),
+                    SummaryBar(_text.T("logs.errors"), logs.Count(log => !log.Success), logs.Length, StatusError),
+                    SummaryBar(_text.T("logs.warnings"), 0, Math.Max(logs.Length, 1), StatusWarning))
+            });
+    }
+
+    private Control BuildSettingsPage()
+    {
+        var plugin = RuntimeHolder.PluginInstallService.GetStatus();
+        var agents = RuntimeHolder.AgentConfigService.Detect().ToArray();
+        var warning = plugin.IsCompatible && plugin.Warnings.Count == 0
+            ? null
+            : PluginWarningBanner(plugin);
+
+        var body = Stack(Orientation.Vertical, 10);
+        if (warning is not null)
+        {
+            body.Children.Add(warning);
+        }
+
+        body.Children.Add(new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("0.85*,1.25*"),
+            ColumnSpacing = 14,
+            Children =
+            {
+                LanguageSettingsCard().WithColumn(0),
+                PluginSettingsCard(plugin).WithColumn(1)
+            }
+        });
+
+        body.Children.Add(new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("1.05*,0.95*"),
+            ColumnSpacing = 14,
+            Children =
+            {
+                AgentSettingsCard(agents).WithColumn(0),
+                AdvancedSettingsCard().WithColumn(1)
+            }
+        });
+
+        body.Children.Add(ManualConfigurationCard());
+
+        if (!string.IsNullOrWhiteSpace(_settingsMessage))
+        {
+            body.Children.Add(StateTile(_text.T("lastAction"), _settingsMessage, RowKind.Info));
+        }
+
+        return PageScaffold(
+            BuildToolbar(
+                _text.T("page.settings.title"),
+                _text.F("page.settings.subtitle", PluginSummary(plugin), agents.Count(agent => agent.IsConfigured), DateTime.Now.ToString("T", _text.Culture)),
+                ToolbarEndpointControls(includeSettings: true)),
+            new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,12"),
+                Background = Brush(SurfacePrimary),
+                Children =
+                {
+                    new ScrollViewer
+                    {
+                        Content = body,
+                        Padding = new Thickness(14, 18, 18, 28),
+                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                    }.WithColumn(0),
+                    new Border
+                    {
+                        Background = Brush(SurfacePrimary),
+                        Padding = new Thickness(3, 0),
+                        Child = new Border
+                        {
+                            Width = 6,
+                            Height = 116,
+                            CornerRadius = new CornerRadius(8),
+                            Background = Brush(BorderSubtle),
+                            VerticalAlignment = VerticalAlignment.Top,
+                            Margin = new Thickness(0, 72, 0, 0)
+                        }
+                    }.WithColumn(1)
+                }
+            });
+    }
+
+    private Control PluginWarningBanner(PluginInstallStatus plugin)
+    {
+        return new Border
+        {
+            Height = 46,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 10),
+            Background = Brush(StatusWarningBg),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+                ColumnSpacing = 10,
+                Children =
+                {
+                    BadgeIcon("!", RowKind.Warning).WithColumn(0),
+                    Stack(Orientation.Vertical, 2,
+                        Text(_text.T("settings.pluginWarningTitle"), 12, FontWeight.SemiBold, ForegroundPrimary),
+                        Text(LocalizePluginMessage(plugin), 10, FontWeight.Normal, ForegroundSecondary).Ellipsis())
+                        .WithColumn(1),
+                    ActionButton(_text.T("button.verify"), () =>
+                    {
+                        _settingsDirty = true;
+                        return Task.CompletedTask;
+                    }, ButtonKind.Light).WithColumn(2)
+                }
+            }
+        };
+    }
+
+    private Control LanguageSettingsCard()
+    {
+        return SectionCard(Stack(Orientation.Vertical, 12,
+            SettingsSectionHeader(_text.T("settings.language"), _text.T("settings.languageMeta")),
+            new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Background = Brush(SurfaceTertiary),
+                Padding = new Thickness(4),
+                Child = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,*"),
+                    ColumnSpacing = 4,
+                    Children =
+                    {
+                        LanguageButton(AppLanguage.English).WithColumn(0),
+                        LanguageButton(AppLanguage.Chinese).WithColumn(1)
+                    }
+                }
+            }));
+    }
+
+    private Control PluginSettingsCard(PluginInstallStatus plugin)
+    {
+        var actions = Stack(Orientation.Horizontal, 6,
+            ActionButton(plugin.IsCompatible ? _text.T("button.reinstall") : _text.T("button.install"), () => RunSettingsActionAsync(() => RuntimeHolder.PluginInstallService.InstallOrRepair()), ButtonKind.Primary),
+            ActionButton(_text.T("button.uninstall"), () => RunSettingsActionAsync(() => RuntimeHolder.PluginInstallService.Uninstall()), ButtonKind.Secondary),
+            ActionButton(_text.T("button.verify"), () =>
+            {
+                _settingsDirty = true;
+                RenderSelectedPage(force: true);
+                return Task.CompletedTask;
+            }, ButtonKind.Secondary));
+
+        var panel = Stack(Orientation.Vertical, 10,
+            SettingsSectionHeader(_text.T("settings.idaPlugin"), _text.T("settings.pluginMeta")),
+            SettingLine(_text.T("settings.installStatus"), PluginTitle(plugin), plugin.IsCompatible ? RowKind.Success : RowKind.Warning),
+            SettingLine(_text.T("settings.pluginVersion"), _text.F("settings.pluginVersionValue", plugin.InstalledVersion ?? _text.T("none"), plugin.ExpectedVersion), plugin.IsCompatible ? RowKind.Success : RowKind.Warning),
+            SettingPath(_text.T("settings.installPath"), plugin.LoaderPath),
+            actions);
+
+        if (plugin.Warnings.Count > 0)
+        {
+            panel.Children.Add(ActionButton(_text.T("button.archiveLegacy"), () => RunSettingsActionAsync(() => RuntimeHolder.PluginInstallService.ArchiveLegacyPlugins()), ButtonKind.Warning));
+        }
+
+        return SectionCard(panel);
+    }
+
+    private Control AgentSettingsCard(IReadOnlyCollection<AgentConfigStatus> agents)
+    {
+        var panel = Stack(Orientation.Vertical, 10,
+            SettingsSectionHeader(_text.T("settings.mcpClients"), _text.F("settings.clientsMeta", agents.Count(agent => agent.IsConfigured))));
+
+        foreach (var agent in agents)
+        {
+            var configure = ActionButton(
+                agent.IsConfigured ? _text.T("button.edit") : _text.T("button.configure"),
+                () => RunAgentConfigureAsync(agent),
+                agent.IsConfigured ? ButtonKind.Secondary : ButtonKind.Primary,
+                agent.CanAutoConfigure);
+
+            panel.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8),
+                Background = Brush(SurfacePrimary),
+                Child = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    ColumnSpacing = 10,
+                    Children =
+                    {
+                        Stack(Orientation.Vertical, 4,
+                            Text(agent.AgentName, 12, FontWeight.SemiBold, ForegroundPrimary),
+                            Text(AgentSummary(agent), 10, FontWeight.Normal, agent.IsConfigured ? StatusOnline : agent.HasLegacyConfig ? StatusWarning : ForegroundMuted).Wrap())
+                            .WithColumn(0),
+                        configure.WithColumn(1)
+                    }
+                }
+            });
+        }
+
+        return SectionCard(panel);
+    }
+
+    private Control AdvancedSettingsCard()
+    {
+        return SectionCard(Stack(Orientation.Vertical, 8,
+            SettingsSectionHeader(_text.T("settings.advanced"), _text.T("settings.runtimeSettings")),
+            SettingLine(_text.T("settings.mcpPort"), DesktopSettings.Current.McpPort.ToString(), RowKind.Neutral),
+            SettingLine(_text.T("settings.tcpPort"), DesktopSettings.Current.TcpPort.ToString(), RowKind.Neutral),
+            SettingLine(_text.T("settings.logLevel"), "Info", RowKind.Neutral),
+            SettingLine(_text.T("settings.launchLogin"), _text.T("status.enabled"), RowKind.Success),
+            SettingLine(_text.T("settings.startMinimized"), _text.T("status.disabled"), RowKind.Neutral)));
+    }
+
+    private Control ManualConfigurationCard()
+    {
+        var httpText = _text.F("manual.http", ProductInfo.AgentServerName, RuntimeHolder.McpEndpoint);
+        var stdioText = ManualStdioSnippet();
+
+        return SectionCard(Stack(Orientation.Vertical, 10,
+            SettingsSectionHeader(_text.T("section.manual"), _text.T("settings.manualMeta")),
+            new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,*"),
+                ColumnSpacing = 8,
+                Children =
+                {
+                    CodeBlock("HTTP", httpText).WithColumn(0),
+                    CodeBlock("stdio", stdioText).WithColumn(1)
+                }
+            }));
+    }
+
+    private Control LanguageButton(AppLanguage language)
     {
         var selected = _text.Language == language;
         var button = new Button
         {
-            Content = new TextBlock
-            {
-                Text = label,
-                FontSize = 12,
-                FontWeight = selected ? FontWeight.SemiBold : FontWeight.Medium
-            },
-            Padding = new Thickness(10, 5),
-            MinHeight = 28,
-            Background = selected ? Brush("#101828") : Brushes.Transparent,
-            Foreground = selected ? Brushes.White : Brush("#475467"),
+            Height = 28,
+            Background = selected ? Brush(SurfacePrimary) : Brushes.Transparent,
+            Foreground = Brush(selected ? ForegroundPrimary : ForegroundSecondary),
             BorderBrush = Brushes.Transparent,
+            CornerRadius = new CornerRadius(6),
+            Content = Text(language == AppLanguage.Chinese ? "中文" : "English", 11, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundSecondary),
             Cursor = new Cursor(StandardCursorType.Hand)
         };
         button.Click += (_, _) => SetLanguage(language);
-        AttachButtonHover(button, selected ? ButtonKind.Dark : ButtonKind.Ghost, selected);
+        AttachButtonHover(button, selected ? ButtonKind.Selected : ButtonKind.Ghost, selected);
         return button;
     }
 
@@ -204,294 +1206,586 @@ public sealed class MainWindow : Window
         _text.SetLanguage(language);
         AppPreferencesStore.Save(new AppPreferences(language));
         _settingsDirty = true;
-        _selectedTabIndex = 5;
-        ResetPagePanels();
         Content = BuildLayout();
-        Refresh();
+        Refresh(force: true);
     }
 
-    private void ResetPagePanels()
+    private Control BuildToolbar(string title, string subtitle, Control controls)
     {
-        _targets = Panel(10);
-        _activity = Panel(10);
-        _processes = Panel(10);
-        _installations = Panel(10);
-        _logs = Panel(10);
-        _settings = Panel(14);
+        return new Border
+        {
+            Height = 58,
+            Padding = new Thickness(18, 12),
+            Background = Brush(SurfacePrimary),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                ColumnSpacing = 12,
+                Children =
+                {
+                    Stack(Orientation.Vertical, 2,
+                        Text(title, 18, FontWeight.SemiBold, ForegroundPrimary, HeadingFont),
+                        Text(subtitle, 12, FontWeight.Normal, ForegroundSecondary))
+                        .WithColumn(0),
+                    controls.WithColumn(1)
+                }
+            }
+        };
     }
 
-    private void Refresh()
+    private Control ToolbarEndpointControls(bool includeSettings)
     {
-        _status.Text = _text.F("updated", DateTime.Now.ToString("T", _text.Culture));
-        RenderTargets();
-        RenderActiveOperations();
-        RenderProcesses();
-        RenderInstallations();
-        RenderLogs();
-        if (_settingsDirty)
+        var controls = Stack(Orientation.Horizontal, 8,
+            EndpointChip("MCP", RuntimeHolder.McpEndpoint),
+            EndpointChip("IDA TCP", RuntimeHolder.TcpEndpoint),
+            LanguageMiniSwitch(),
+            RefreshButton());
+
+        if (includeSettings)
         {
-            RenderSettings();
-            _settingsDirty = false;
+            controls.Children.Add(SmallSquareButton("*", () =>
+            {
+                _settingsDirty = true;
+                RenderSelectedPage(force: true);
+                return Task.CompletedTask;
+            }));
         }
+
+        return controls;
     }
 
-    private void RenderTargets()
+    private Control LanguageMiniSwitch()
     {
-        _targets.Children.Clear();
-        var targets = RuntimeHolder.TargetRegistry.ListTargets();
-        if (targets.Count == 0)
+        return new Border
         {
-            _targets.Children.Add(Empty(_text.T("empty.targets")));
-            return;
-        }
-
-        foreach (var target in targets)
-        {
-            var closeButton = ActionButton(_text.T("button.close"), () => RuntimeHolder.IdaLaunchService.CloseProcess(target.ProcessId, force: false));
-            _targets.Children.Add(Row(
-                TargetTitle(target),
-                _text.F(
-                    "target.details",
-                    target.Alias,
-                    target.InputPath ?? _text.T("noInputPath"),
-                    target.DatabasePath ?? _text.T("noDatabasePath"),
-                    target.LastSeenUtc.LocalDateTime.ToString("T", _text.Culture)),
-                closeButton,
-                target.Health == TargetHealth.Healthy ? RowKind.Success : RowKind.Warning,
-                $"{_text.T("status." + HealthKey(target.Health))} · PID {target.ProcessId}"));
-        }
+            Width = 54,
+            Height = 30,
+            CornerRadius = new CornerRadius(8),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Horizontal, 3,
+                MiniLangButton("EN", AppLanguage.English),
+                MiniLangButton("中", AppLanguage.Chinese))
+        };
     }
 
-    private void RenderActiveOperations()
+    private Control MiniLangButton(string label, AppLanguage language)
     {
-        _activity.Children.Clear();
-        var operations = RuntimeHolder.ActiveOperations.List();
-        if (operations.Count == 0)
+        var selected = _text.Language == language;
+        var button = new Button
         {
-            _activity.Children.Add(Empty(_text.T("empty.activity")));
-            return;
-        }
-
-        foreach (var operation in operations)
-        {
-            _activity.Children.Add(Row(
-                $"{operation.TargetAlias} · {operation.ToolName}",
-                _text.F(
-                    "operation.details",
-                    operation.StartedAtUtc.LocalDateTime.ToString("T", _text.Culture),
-                    operation.TargetInstanceId),
-                null,
-                RowKind.Info));
-        }
+            Width = 25,
+            Height = 26,
+            Margin = new Thickness(2, 2, 0, 2),
+            Padding = new Thickness(0),
+            Background = selected ? Brush(SurfacePrimary) : Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            Foreground = Brush(selected ? ForegroundPrimary : ForegroundMuted),
+            Content = Text(label, 10, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundMuted, DataFont),
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        button.Click += (_, _) => SetLanguage(language);
+        return button;
     }
 
-    private void RenderProcesses()
+    private Control RefreshButton()
     {
-        _processes.Children.Clear();
-        var processes = RuntimeHolder.IdaLaunchService.ListLaunchedProcesses();
-        if (processes.Count == 0)
+        return SmallSquareButton("R", () =>
         {
-            _processes.Children.Add(Empty(_text.T("empty.processes")));
-            return;
-        }
-
-        foreach (var process in processes)
-        {
-            _processes.Children.Add(Row(
-                _text.F("process.title", process.ProcessId),
-                _text.F(
-                    "process.details",
-                    process.InputPath,
-                    process.ExecutablePath,
-                    process.LaunchedAtUtc.LocalDateTime.ToString("T", _text.Culture)),
-                null,
-                process.HasExited ? RowKind.Neutral : RowKind.Success,
-                process.HasExited ? _text.T("status.closing") : _text.T("status.healthy")));
-        }
+            _settingsDirty = true;
+            Refresh(force: true);
+            return Task.CompletedTask;
+        });
     }
 
-    private void RenderInstallations()
+    private Control PageScaffold(Control toolbar, Control content)
     {
-        _installations.Children.Clear();
-        var installations = RuntimeHolder.IdaLocator.FindInstallations();
-        if (installations.Count == 0)
+        return new Grid
         {
-            _installations.Children.Add(Empty(_text.T("empty.installations")));
-            return;
-        }
-
-        foreach (var install in installations)
-        {
-            _installations.Children.Add(Row(
-                install.DisplayName,
-                _text.F("install.details", install.Path, install.Source),
-                null,
-                install.Exists ? RowKind.Success : RowKind.Warning,
-                install.Exists ? _text.T("status.exists") : _text.T("status.missing")));
-        }
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            Background = Brush(SurfacePrimary),
+            Children =
+            {
+                toolbar.WithRow(0),
+                content.WithRow(1)
+            }
+        };
     }
 
-    private void RenderLogs()
+    private Control PagePadding(Control content)
     {
-        _logs.Children.Clear();
-        var logs = RuntimeHolder.OperationLog.List(200);
-        if (logs.Count == 0)
+        return new Border
         {
-            _logs.Children.Add(Empty(_text.T("empty.logs")));
-            return;
-        }
-
-        foreach (var log in logs)
-        {
-            _logs.Children.Add(Row(
-                _text.F("log.title", log.TargetAlias, log.ToolName),
-                _text.F(
-                    "log.details",
-                    log.TimestampUtc.LocalDateTime.ToString("T", _text.Culture),
-                    log.Elapsed,
-                    log.Error ?? _text.T("noError")),
-                null,
-                log.Success ? RowKind.Success : RowKind.Danger,
-                log.Success ? _text.T("status.success") : _text.T("status.failed")));
-        }
+            Padding = new Thickness(20),
+            Background = Brush(SurfacePrimary),
+            Child = content
+        };
     }
 
-    private void RenderSettings()
+    private Control PanelCard(string title, string summary, Control body)
     {
-        _settings.Children.Clear();
-        _settings.Children.Add(SectionTitle(_text.T("section.center")));
-        _settings.Children.Add(Row(
-            _text.T("center.runtime"),
-            _text.F(
-                "center.details",
-                RuntimeHolder.McpEndpoint,
-                RuntimeHolder.TcpEndpoint,
-                RuntimeHolder.RepositoryPaths.Root ?? _text.T("notDiscovered")),
-            null,
-            RowKind.Info));
-
-        _settings.Children.Add(SectionTitle(_text.T("section.language")));
-        _settings.Children.Add(Row(
-            _text.T("language"),
-            _text.T("language.details"),
-            LanguageSwitch(),
-            RowKind.Neutral,
-            _text.Language == AppLanguage.Chinese ? "中文" : "English"));
-
-        if (!string.IsNullOrWhiteSpace(_settingsMessage))
+        return new Border
         {
-            _settings.Children.Add(Row(_text.T("lastAction"), _settingsMessage, null, RowKind.Info));
-        }
-
-        RenderPluginSettings();
-        RenderAgentSettings();
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Vertical, 8,
+                HeaderRow(title, summary),
+                body)
+        };
     }
 
-    private void RenderPluginSettings()
+    private static Control Card(Control content, double? height = null)
     {
-        var status = RuntimeHolder.PluginInstallService.GetStatus();
-        var actionButtons = new StackPanel
+        return new Border
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Left
+            Height = height ?? double.NaN,
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(16),
+            Background = Brush(SurfaceSecondary),
+            Child = content
+        };
+    }
+
+    private static Border SectionCard(Control content, Thickness? padding = null)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Padding = padding ?? new Thickness(12),
+            Background = Brush(SurfaceSecondary),
+            Child = content
+        };
+    }
+
+    private Control HeaderRow(string title, string summary)
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Children =
+            {
+                Text(title, 15, FontWeight.Bold, ForegroundPrimary, HeadingFont).WithColumn(0),
+                Text(summary, 11, FontWeight.Normal, ForegroundMuted, DataFont).WithColumn(1)
+            }
+        };
+    }
+
+    private Control SettingsSectionHeader(string title, string meta)
+    {
+        return Stack(Orientation.Horizontal, 7,
+            Text(title, 12, FontWeight.SemiBold, ForegroundPrimary),
+            Text(meta, 10, FontWeight.Normal, ForegroundMuted, CaptionFont));
+    }
+
+    private Control SettingLine(string label, string value, RowKind kind)
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Height = 25,
+            Children =
+            {
+                Text(label, 11, FontWeight.Normal, ForegroundSecondary).WithColumn(0),
+                Text(value, 11, FontWeight.Medium, KindForeground(kind), DataFont).Ellipsis().WithColumn(1)
+            }
+        };
+    }
+
+    private Control SettingPath(string label, string? path)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7),
+            Background = Brush(SurfacePrimary),
+            Child = Stack(Orientation.Vertical, 3,
+                Text(label, 10, FontWeight.Normal, ForegroundMuted, CaptionFont),
+                Text(path ?? _text.T("none"), 10, FontWeight.Normal, ForegroundSecondary, DataFont).Ellipsis())
+        };
+    }
+
+    private Control CodeBlock(string title, string code)
+    {
+        var copy = ActionButton(_text.T("button.copy"), () => CopyTextAsync(code), ButtonKind.Code);
+        return new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            BorderBrush = Brush(CodeBorder),
+            BorderThickness = new Thickness(1),
+            Background = Brush(CodeBg),
+            Padding = new Thickness(10),
+            Child = Stack(Orientation.Vertical, 8,
+                new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    Children =
+                    {
+                        Text(title, 10, FontWeight.SemiBold, "#B6C4B8", DataFont).WithColumn(0),
+                        copy.WithColumn(1)
+                    }
+                },
+                new SelectableTextBlock
+                {
+                    Text = code,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontFamily = DataFont,
+                    FontSize = 10,
+                    Foreground = Brush("#DDE9DF"),
+                    LineHeight = 15
+                })
+        };
+    }
+
+    private Control EmptyState(string title, string body)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(16),
+            Background = Brush(SurfacePrimary),
+            Child = Stack(Orientation.Horizontal, 12,
+                BadgeIcon("-", RowKind.Neutral),
+                Stack(Orientation.Vertical, 5,
+                    Text(title, 13, FontWeight.SemiBold, ForegroundPrimary),
+                    Text(body, 12, FontWeight.Normal, ForegroundSecondary).Wrap()))
+        };
+    }
+
+    private Control StateTile(string title, string body, RowKind kind)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(16),
+            Background = Brush(kind == RowKind.Danger ? StatusErrorBg : SurfaceSecondary),
+            BorderBrush = Brush(kind == RowKind.Danger ? StatusError : SurfaceSecondary),
+            BorderThickness = kind == RowKind.Danger ? new Thickness(1) : new Thickness(0),
+            Child = Stack(Orientation.Vertical, 8,
+                BadgeIcon(kind == RowKind.Danger ? "!" : "-", kind),
+                Text(title, 14, FontWeight.Bold, ForegroundPrimary, HeadingFont),
+                Text(body, 12, FontWeight.Normal, kind == RowKind.Danger ? StatusError : ForegroundSecondary).Wrap())
+        };
+    }
+
+    private Control OverviewMetric(string label, string value, string body, RowKind kind)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(14),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Vertical, 5,
+                Stack(Orientation.Horizontal, 6, Dot(KindForeground(kind)), Text(label, 11, FontWeight.Normal, ForegroundMuted, CaptionFont)),
+                Text(value, 17, FontWeight.Bold, ForegroundPrimary, DataFont),
+                Text(body, 11, FontWeight.Normal, ForegroundSecondary).Wrap())
+        };
+    }
+
+    private Control MetricCard(string label, string value, string valueColor, bool dark = false)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(14),
+            Background = Brush(dark ? SurfaceInverse : SurfaceSecondary),
+            Child = Stack(Orientation.Vertical, 4,
+                Text(label, 12, FontWeight.Normal, dark ? ForegroundInverse : ForegroundMuted, CaptionFont),
+                Text(value, dark ? 17 : 30, FontWeight.SemiBold, valueColor, DataFont).Ellipsis())
+        };
+    }
+
+    private Control SummaryPill(string label, string value, bool dark)
+    {
+        return new Border
+        {
+            Width = 154,
+            Height = 62,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 8),
+            Background = Brush(dark ? "#304934" : SurfacePrimary),
+            Child = Stack(Orientation.Vertical, 4,
+                Text(label, 10, FontWeight.Normal, dark ? "#B6C4B8" : ForegroundMuted, CaptionFont),
+                Text(value, 18, FontWeight.Bold, dark ? ForegroundInverse : ForegroundPrimary, DataFont))
+        };
+    }
+
+    private Control SummaryBar(string label, int count, int total, string color)
+    {
+        var width = Math.Max(2, Math.Min(180, total == 0 ? 2 : count * 180.0 / total));
+        return Stack(Orientation.Vertical, 4,
+            new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                Children =
+                {
+                    Text(label, 10, FontWeight.Normal, "#B6C4B8").WithColumn(0),
+                    Text(count.ToString(), 10, FontWeight.SemiBold, ForegroundInverse, DataFont).WithColumn(1)
+                }
+            },
+            new Border
+            {
+                Height = 8,
+                CornerRadius = new CornerRadius(999),
+                Background = Brush("#DDE9DF"),
+                Child = new Border
+                {
+                    Width = width,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    CornerRadius = new CornerRadius(999),
+                    Background = Brush(color)
+                }
+            });
+    }
+
+    private Control SearchPlaceholder(string text, double width)
+    {
+        return new Border
+        {
+            Width = width,
+            Height = 34,
+            CornerRadius = new CornerRadius(8),
+            Background = Brush(SurfacePrimary),
+            BorderBrush = Brush(BorderSubtle),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(10, 8),
+            Child = Text(text, 11, FontWeight.Normal, ForegroundMuted)
+        };
+    }
+
+    private Control SegmentedStatusFilters()
+    {
+        return new Border
+        {
+            Height = 34,
+            CornerRadius = new CornerRadius(8),
+            Background = Brush(SurfaceTertiary),
+            Padding = new Thickness(4),
+            Child = Stack(Orientation.Horizontal, 4,
+                FilterSegment(_text.T("filter.all"), selected: true),
+                FilterSegment(_text.T("filter.online")),
+                FilterSegment(_text.T("filter.timeout")))
+        };
+    }
+
+    private Control FilterSegment(string label, bool selected = false)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(9, 5),
+            Background = Brush(selected ? SurfacePrimary : SurfaceTertiary),
+            Child = Text(label, 10, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundSecondary)
+        };
+    }
+
+    private Control EndpointChip(string label, string value)
+    {
+        return new Border
+        {
+            Height = 30,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Horizontal, 6,
+                Text(label, 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text(value, 10, FontWeight.Normal, ForegroundPrimary, DataFont))
+        };
+    }
+
+    private Button ActionButton(string text, Func<Task> action, ButtonKind kind = ButtonKind.Secondary, bool enabled = true)
+    {
+        var palette = GetButtonPalette(kind);
+        var button = new Button
+        {
+            MinHeight = palette.Height,
+            Padding = palette.Padding,
+            Background = palette.Background,
+            Foreground = palette.Foreground,
+            BorderBrush = palette.Border,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(palette.Radius),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            IsEnabled = enabled,
+            Opacity = enabled ? 1 : 0.45,
+            Content = Text(text, palette.FontSize, FontWeight.SemiBold, palette.ForegroundColor)
         };
 
-        actionButtons.Children.Add(ActionButton(
-            status.IsCompatible ? _text.T("button.reinstall") : _text.T("button.install"),
-            () => RunSettingsAction(() =>
-            {
-                var next = RuntimeHolder.PluginInstallService.InstallOrRepair();
-                _settingsMessage = LocalizePluginMessage(next);
-            }),
-            ButtonKind.Primary));
-
-        actionButtons.Children.Add(ActionButton(
-            _text.T("button.uninstall"),
-            () => RunSettingsAction(() =>
-            {
-                var next = RuntimeHolder.PluginInstallService.Uninstall();
-                _settingsMessage = LocalizePluginMessage(next);
-            })));
-
-        if (status.Warnings.Count > 0)
+        button.Click += async (_, _) =>
         {
-            actionButtons.Children.Add(ActionButton(
-                _text.T("button.archiveLegacy"),
-                () => RunSettingsAction(() =>
-                {
-                    var next = RuntimeHolder.PluginInstallService.ArchiveLegacyPlugins();
-                    _settingsMessage = next.Warnings.Count == 0
-                        ? _text.T("plugin.archiveDone")
-                        : LocalizePluginMessage(next);
-                }),
-                ButtonKind.Warning));
-        }
+            if (!button.IsEnabled)
+            {
+                return;
+            }
 
-        var kind = status.IsCompatible && status.Warnings.Count == 0
-            ? RowKind.Success
-            : status.Warnings.Count > 0
-                ? RowKind.Warning
-                : RowKind.Danger;
+            button.IsEnabled = false;
+            try
+            {
+                await action().ConfigureAwait(true);
+            }
+            finally
+            {
+                button.IsEnabled = enabled;
+            }
+        };
 
-        _settings.Children.Add(SectionTitle(_text.T("section.plugin")));
-        var warnings = status.Warnings.Count == 0
-            ? _text.T("plugin.noWarnings")
-            : string.Join("\n", status.Warnings.Select(warning => "• " + warning));
-        _settings.Children.Add(Row(
-            PluginTitle(status),
-            _text.F(
-                "plugin.details",
-                status.ExpectedVersion,
-                status.InstalledVersion ?? _text.T("none"),
-                YesNo(status.IsOurs),
-                status.LoaderPath,
-                status.PackagePath,
-                status.SourceRoot ?? _text.T("notDiscovered"),
-                LocalizePluginMessage(status),
-                warnings),
-            actionButtons,
-            kind));
+        AttachButtonHover(button, kind, selected: false);
+        return button;
     }
 
-    private void RenderAgentSettings()
+    private Button MiniButton(string text, Func<Task> action, ButtonKind kind = ButtonKind.Mini, bool enabled = true)
     {
-        _settings.Children.Add(SectionTitle(_text.T("section.agents")));
-        foreach (var agent in RuntimeHolder.AgentConfigService.Detect())
-        {
-            var configureButton = ActionButton(
-                agent.IsConfigured ? _text.T("button.reconfigure") : _text.T("button.configure"),
-                () => RunSettingsAction(() =>
-                {
-                    var next = RuntimeHolder.AgentConfigService.Configure(agent.AgentName, agent.ConfigPath);
-                    _settingsMessage = $"{next.AgentName}: {AgentSummary(next)}";
-                }),
-                ButtonKind.Primary,
-                agent.CanAutoConfigure);
-
-            _settings.Children.Add(Row(
-                agent.AgentName,
-                _text.F(
-                    "agent.details",
-                    agent.ConfigPath,
-                    YesNo(agent.ConfigExists),
-                    YesNo(agent.HasLegacyConfig),
-                    AgentSummary(agent)),
-                configureButton,
-                agent.IsConfigured ? RowKind.Success : agent.HasLegacyConfig ? RowKind.Warning : RowKind.Neutral,
-                agent.IsConfigured ? _text.T("status.configured") : _text.T("status.notConfigured")));
-        }
-
-        _settings.Children.Add(SectionTitle(_text.T("section.manual")));
-        _settings.Children.Add(CodeBlock(_text.F("manual.http", ProductInfo.AgentServerName, RuntimeHolder.McpEndpoint)));
-        _settings.Children.Add(CodeBlock(ManualStdioSnippet()));
+        return ActionButton(text, action, kind, enabled);
     }
 
-    private void RunSettingsAction(Action action)
+    private Button SmallSquareButton(string text, Func<Task> action)
     {
+        var button = ActionButton(text, action, ButtonKind.Square);
+        button.Width = 30;
+        button.MinWidth = 30;
+        button.Padding = new Thickness(0);
+        return button;
+    }
+
+    private Border Chip(string text, RowKind kind)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(999),
+            Padding = new Thickness(8, 4),
+            Background = Brush(KindBackground(kind)),
+            Child = Text(text, 10, FontWeight.SemiBold, KindForeground(kind), DataFont)
+        };
+    }
+
+    private Control HealthBadge(TargetHealth health)
+    {
+        var kind = health switch
+        {
+            TargetHealth.Healthy => RowKind.Success,
+            TargetHealth.Unreachable => RowKind.Warning,
+            TargetHealth.Closing => RowKind.Neutral,
+            _ => RowKind.Neutral
+        };
+
+        return Stack(Orientation.Horizontal, 6,
+            Dot(KindForeground(kind)),
+            Text(_text.T("status." + HealthKey(health)), 11, FontWeight.SemiBold, KindForeground(kind)));
+    }
+
+    private static Control BadgeIcon(string value, RowKind kind)
+    {
+        return new Border
+        {
+            Width = 24,
+            Height = 24,
+            CornerRadius = new CornerRadius(8),
+            Background = Brush(KindBackground(kind)),
+            Child = CenteredText(value, 12, FontWeight.Bold, KindForeground(kind), DataFont)
+        };
+    }
+
+    private static Control Dot(string color)
+    {
+        return new Border
+        {
+            Width = 7,
+            Height = 7,
+            CornerRadius = new CornerRadius(999),
+            Background = Brush(color),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
+    private static TextBlock Text(string text, double size, FontWeight weight, string color, FontFamily? font = null)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            FontFamily = font ?? BodyFont,
+            FontSize = size,
+            FontWeight = weight,
+            Foreground = Brush(color),
+            TextTrimming = TextTrimming.None,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
+    private static TextBlock CenteredText(string text, double size, FontWeight weight, string color, FontFamily? font = null)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            FontFamily = font ?? BodyFont,
+            FontSize = size,
+            FontWeight = weight,
+            Foreground = Brush(color),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center
+        };
+    }
+
+    private static StackPanel Stack(Orientation orientation, double spacing, params Control[] children)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = orientation,
+            Spacing = spacing
+        };
+
+        foreach (var child in children)
+        {
+            panel.Children.Add(child);
+        }
+
+        return panel;
+    }
+
+    private static SolidColorBrush Brush(string color)
+    {
+        return new SolidColorBrush(Color.Parse(color));
+    }
+
+    private async Task RefreshAllMetadataAsync()
+    {
+        var targets = RuntimeHolder.TargetRegistry.ListTargets();
+        foreach (var target in targets)
+        {
+            await CallTargetToolAsync("ida_get_metadata", target.InstanceId, _text.T("action.metadataRefreshed")).ConfigureAwait(true);
+        }
+    }
+
+    private async Task CallTargetToolAsync(string toolName, string instanceId, string successMessage)
+    {
+        var args = JsonSerializer.SerializeToElement(new { instanceId });
+        var result = await RuntimeHolder.ToolHandler.CallAsync(toolName, args, CancellationToken.None).ConfigureAwait(true);
+        _settingsMessage = result.IsError ? result.Text : successMessage;
+        _settingsDirty = true;
+        RenderSelectedPage(force: true);
+    }
+
+    private async Task CallTargetCloseAsync(TargetInfo target)
+    {
+        var args = JsonSerializer.SerializeToElement(new { target.InstanceId, force = false });
+        var result = await RuntimeHolder.ToolHandler.CallAsync("ida_close_target", args, CancellationToken.None).ConfigureAwait(true);
+        _settingsMessage = result.IsError ? result.Text : _text.T("action.closeSent");
+        _settingsDirty = true;
+        RenderSelectedPage(force: true);
+    }
+
+    private Task OpenTargetInIdaAsync(TargetInfo target)
+    {
+        if (string.IsNullOrWhiteSpace(target.InputPath))
+        {
+            _settingsMessage = _text.T("action.noInputPath");
+            _settingsDirty = true;
+            return Task.CompletedTask;
+        }
+
         try
         {
-            action();
+            RuntimeHolder.IdaLaunchService.Launch(new IdaLaunchRequest(target.InputPath, null, []));
+            _settingsMessage = _text.T("action.launchSent");
         }
         catch (Exception exc)
         {
@@ -499,7 +1793,63 @@ public sealed class MainWindow : Window
         }
 
         _settingsDirty = true;
-        Refresh();
+        RenderSelectedPage(force: true);
+        return Task.CompletedTask;
+    }
+
+    private Task RunSettingsActionAsync(Func<PluginInstallStatus> action)
+    {
+        try
+        {
+            var next = action();
+            _settingsMessage = LocalizePluginMessage(next);
+        }
+        catch (Exception exc)
+        {
+            _settingsMessage = exc.Message;
+        }
+
+        _settingsDirty = true;
+        RenderSelectedPage(force: true);
+        return Task.CompletedTask;
+    }
+
+    private Task RunAgentConfigureAsync(AgentConfigStatus agent)
+    {
+        try
+        {
+            var next = RuntimeHolder.AgentConfigService.Configure(agent.AgentName, agent.ConfigPath);
+            _settingsMessage = $"{next.AgentName}: {AgentSummary(next)}";
+        }
+        catch (Exception exc)
+        {
+            _settingsMessage = exc.Message;
+        }
+
+        _settingsDirty = true;
+        RenderSelectedPage(force: true);
+        return Task.CompletedTask;
+    }
+
+    private async Task CopyTextAsync(string text)
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is not null)
+        {
+            await clipboard.SetTextAsync(text).ConfigureAwait(true);
+            _settingsMessage = _text.T("action.copied");
+            _settingsDirty = true;
+            RenderSelectedPage(force: true);
+        }
+    }
+
+    private Task CopyLogsAsync()
+    {
+        var text = string.Join(
+            Environment.NewLine,
+            RuntimeHolder.OperationLog.List(200).Select(log =>
+                $"{log.TimestampUtc.LocalDateTime:HH:mm:ss} {(log.Success ? "INFO" : "ERROR")} {log.TargetAlias} {log.ToolName} {log.Error}"));
+        return CopyTextAsync(text);
     }
 
     private string ManualStdioSnippet()
@@ -515,6 +1865,16 @@ public sealed class MainWindow : Window
         return status.IsCompatible
             ? _text.T("plugin.compatible")
             : status.IsInstalled ? _text.T("plugin.attention") : _text.T("plugin.notInstalled");
+    }
+
+    private string PluginSummary(PluginInstallStatus status)
+    {
+        if (!status.IsInstalled)
+        {
+            return _text.T("plugin.notInstalled");
+        }
+
+        return status.IsCompatible ? _text.T("plugin.compatible") : _text.T("plugin.attention");
     }
 
     private string LocalizePluginMessage(PluginInstallStatus status)
@@ -560,9 +1920,18 @@ public sealed class MainWindow : Window
         return _text.T(isCodex ? "agent.summary.codexCreate" : "agent.summary.claudeCreate");
     }
 
-    private string YesNo(bool value)
+    private bool MatchesLogFilter(OperationLogEntry log)
     {
-        return _text.T(value ? "yes" : "no");
+        return _logFilter switch
+        {
+            LogFilter.Error => !log.Success,
+            LogFilter.Plugin => log.ToolName.StartsWith("target.", StringComparison.OrdinalIgnoreCase)
+                || log.ToolName.StartsWith("analysis.", StringComparison.OrdinalIgnoreCase),
+            LogFilter.Agent => log.ToolName.StartsWith("analysis.", StringComparison.OrdinalIgnoreCase),
+            LogFilter.Mcp => log.ToolName.StartsWith("ida_", StringComparison.OrdinalIgnoreCase),
+            LogFilter.IdaTcp => log.ToolName.StartsWith("target.", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
     }
 
     private static string TargetTitle(TargetInfo target)
@@ -578,6 +1947,66 @@ public sealed class MainWindow : Window
             || processId > 0 && value.Equals($"ida-{processId}", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static string CompactPath(string? path, int maxLength = 34)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "-";
+        }
+
+        var normalized = path.Replace('\\', '/');
+        if (normalized.Length <= maxLength)
+        {
+            return normalized;
+        }
+
+        var file = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? normalized;
+        var prefixLength = Math.Max(8, maxLength - file.Length - 5);
+        if (file.Length + 5 >= maxLength)
+        {
+            return "..." + file[^Math.Min(file.Length, maxLength - 3)..];
+        }
+
+        return normalized[..Math.Min(prefixLength, normalized.Length)] + "/.../" + file;
+    }
+
+    private static string CompactPlatform(TargetInfo target)
+    {
+        var platform = target.Platform;
+        if (string.IsNullOrWhiteSpace(platform))
+        {
+            return target.IdaVersion ?? "-";
+        }
+
+        platform = platform.Replace("Microsoft Windows", "Windows", StringComparison.OrdinalIgnoreCase)
+            .Replace("macOS", "macOS", StringComparison.OrdinalIgnoreCase);
+        return platform.Length <= 14 ? platform : platform[..14] + "...";
+    }
+
+    private string LastSeen(DateTimeOffset lastSeenUtc)
+    {
+        var elapsed = DateTimeOffset.UtcNow - lastSeenUtc;
+        if (elapsed.TotalSeconds < 60)
+        {
+            return _text.F("time.secondsAgo", Math.Max(0, (int)elapsed.TotalSeconds));
+        }
+
+        if (elapsed.TotalMinutes < 60)
+        {
+            return _text.F("time.minutesAgo", (int)elapsed.TotalMinutes);
+        }
+
+        return lastSeenUtc.LocalDateTime.ToString("HH:mm", _text.Culture);
+    }
+
+    private string BestHeartbeat()
+    {
+        var latest = RuntimeHolder.TargetRegistry.ListTargets()
+            .OrderByDescending(target => target.LastSeenUtc)
+            .FirstOrDefault();
+        return latest is null ? _text.T("status.none") : LastSeen(latest.LastSeenUtc);
+    }
+
     private static string HealthKey(TargetHealth health)
     {
         return health switch
@@ -589,246 +2018,107 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static TabItem Tab(string title, Control content)
+    private static string LogSource(OperationLogEntry log)
     {
-        return new TabItem
+        if (log.ToolName.StartsWith("analysis.", StringComparison.OrdinalIgnoreCase))
         {
-            Header = new TextBlock
-            {
-                Text = title,
-                FontSize = 15,
-                FontWeight = FontWeight.Medium,
-                Margin = new Thickness(6, 0)
-            },
-            Content = content
-        };
-    }
-
-    private static StackPanel Panel(double spacing)
-    {
-        return new StackPanel { Spacing = spacing };
-    }
-
-    private static Control Wrap(Control content)
-    {
-        content.Margin = new Thickness(0, 0, 24, 36);
-        return new ScrollViewer
-        {
-            Content = content,
-            Padding = new Thickness(4, 0, 24, 32),
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-    }
-
-    private static Control Empty(string text)
-    {
-        return Row(text, string.Empty, null, RowKind.Neutral);
-    }
-
-    private static Control SectionTitle(string text)
-    {
-        return new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Thickness(0, 12, 0, 2),
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = text,
-                    FontSize = 15,
-                    FontWeight = FontWeight.SemiBold,
-                    Foreground = Brush("#101828"),
-                    VerticalAlignment = VerticalAlignment.Center
-                },
-                SectionRule()
-            }
-        };
-    }
-
-    private static Control SectionRule()
-    {
-        var rule = new Border
-        {
-            Height = 1,
-            Background = Brush("#E4E7EC"),
-            Margin = new Thickness(12, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(rule, 1);
-        return rule;
-    }
-
-    private static Control CodeBlock(string text)
-    {
-        return new Border
-        {
-            Background = Brush("#111827"),
-            BorderBrush = Brush("#1F2937"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(14),
-            Child = new SelectableTextBlock
-            {
-                Text = text,
-                TextWrapping = TextWrapping.Wrap,
-                FontFamily = new FontFamily("Menlo, Consolas, monospace"),
-                FontSize = 12,
-                Foreground = Brush("#F9FAFB"),
-                LineHeight = 18
-            }
-        };
-    }
-
-    private static Control Row(string title, string details, Control? action = null, RowKind kind = RowKind.Neutral, string? badge = null)
-    {
-        var style = RowPalette(kind);
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto")
-        };
-
-        var header = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = title,
-                    FontWeight = FontWeight.SemiBold,
-                    FontSize = 14,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = Brush("#101828"),
-                    VerticalAlignment = VerticalAlignment.Center
-                }
-            }
-        };
-        if (!string.IsNullOrWhiteSpace(badge))
-        {
-            header.Children.Add(Chip(badge, kind));
+            return "Agent";
         }
 
-        var content = new StackPanel
+        if (log.ToolName.StartsWith("target.", StringComparison.OrdinalIgnoreCase))
         {
-            Spacing = string.IsNullOrWhiteSpace(details) ? 0 : 8,
-            Children = { header }
-        };
-        if (!string.IsNullOrWhiteSpace(details))
-        {
-            content.Children.Add(new TextBlock
-            {
-                Text = details,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = Brush("#475467"),
-                LineHeight = 19
-            });
+            return "IDA TCP";
         }
 
-        grid.Children.Add(content);
-
-        if (action is not null)
-        {
-            Grid.SetColumn(action, 1);
-            action.Margin = new Thickness(16, 0, 0, 0);
-            action.VerticalAlignment = VerticalAlignment.Center;
-            grid.Children.Add(action);
-        }
-
-        var card = new Border
-        {
-            Padding = new Thickness(14),
-            Background = style.Background,
-            BorderBrush = style.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Transitions =
-            [
-                new BrushTransition { Property = Border.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(140) },
-                new BrushTransition { Property = Border.BorderBrushProperty, Duration = TimeSpan.FromMilliseconds(140) }
-            ],
-            Child = grid
-        };
-        AttachCardHover(card, style);
-        return card;
+        return "MCP";
     }
 
-    private Button ActionButton(string text, Action action, ButtonKind kind = ButtonKind.Secondary, bool enabled = true)
+    private string PageTitle(CenterPage page)
     {
-        var palette = ButtonPalette(kind);
-        var button = new Button
+        return page switch
         {
-            Content = new TextBlock
-            {
-                Text = text,
-                FontSize = 13,
-                FontWeight = FontWeight.Medium
-            },
-            Padding = new Thickness(12, 7),
-            MinHeight = 32,
-            Background = palette.Background,
-            Foreground = palette.Foreground,
-            BorderBrush = palette.Border,
-            BorderThickness = new Thickness(1),
-            Transitions =
-            [
-                new BrushTransition { Property = Button.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(120) },
-                new BrushTransition { Property = Button.BorderBrushProperty, Duration = TimeSpan.FromMilliseconds(120) },
-                new BrushTransition { Property = Button.ForegroundProperty, Duration = TimeSpan.FromMilliseconds(120) }
-            ],
-            Cursor = new Cursor(StandardCursorType.Hand),
-            IsEnabled = enabled,
-            Opacity = enabled ? 1 : 0.45
-        };
-        button.Click += (_, _) => action();
-        AttachButtonHover(button, kind, selected: false);
-        return button;
-    }
-
-    private static Border Chip(string text, RowKind kind)
-    {
-        var style = RowPalette(kind);
-        return Chip(new TextBlock
-        {
-            Text = text,
-            FontSize = 12,
-            FontWeight = FontWeight.Medium,
-            Foreground = style.ChipForeground
-        }, kind);
-    }
-
-    private static Border Chip(Control content, RowKind kind)
-    {
-        var style = RowPalette(kind);
-        if (content is TextBlock textBlock)
-        {
-            textBlock.Foreground = style.ChipForeground;
-        }
-
-        return new Border
-        {
-            Background = style.ChipBackground,
-            BorderBrush = style.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(999),
-            Padding = new Thickness(9, 4),
-            Child = content
+            CenterPage.Overview => _text.T("tab.overview"),
+            CenterPage.Targets => _text.T("tab.targets"),
+            CenterPage.Activity => _text.T("tab.activity"),
+            CenterPage.Processes => _text.T("tab.processes"),
+            CenterPage.Installations => _text.T("tab.installations"),
+            CenterPage.Logs => _text.T("tab.logs"),
+            CenterPage.Settings => _text.T("tab.settings"),
+            _ => page.ToString()
         };
     }
 
-    private static void AttachCardHover(Border border, RowStyle style)
+    private static string NavGlyph(CenterPage page)
     {
-        border.PointerEntered += (_, _) =>
+        return page switch
         {
-            border.Background = style.HoverBackground;
-            border.BorderBrush = style.Accent;
+            CenterPage.Overview => "O",
+            CenterPage.Targets => "W",
+            CenterPage.Activity => "A",
+            CenterPage.Processes => "P",
+            CenterPage.Installations => "I",
+            CenterPage.Logs => "L",
+            CenterPage.Settings => "S",
+            _ => "-"
         };
-        border.PointerExited += (_, _) =>
+    }
+
+    private static string KindForeground(RowKind kind)
+    {
+        return kind switch
         {
-            border.Background = style.Background;
-            border.BorderBrush = style.Border;
+            RowKind.Success => StatusOnline,
+            RowKind.Warning => StatusWarning,
+            RowKind.Danger => StatusError,
+            RowKind.Info => AccentBlue,
+            _ => ForegroundMuted
+        };
+    }
+
+    private static string KindBackground(RowKind kind)
+    {
+        return kind switch
+        {
+            RowKind.Success => StatusOnlineBg,
+            RowKind.Warning => StatusWarningBg,
+            RowKind.Danger => StatusErrorBg,
+            RowKind.Info => "#EAF1FF",
+            _ => SurfaceTertiary
+        };
+    }
+
+    private static ButtonPalette GetButtonPalette(ButtonKind kind)
+    {
+        return kind switch
+        {
+            ButtonKind.Primary => new ButtonPalette(Brush(AccentBlue), Brush(AccentBlue), Brush(ForegroundInverse), AccentBlue, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.Dark => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 11, new Thickness(12, 8)),
+            ButtonKind.Light => new ButtonPalette(Brush(SurfacePrimary), Brush(SurfacePrimary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 28, 11, new Thickness(10, 5)),
+            ButtonKind.DarkSmall => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 8, 28, 10, new Thickness(10, 5)),
+            ButtonKind.Warning => new ButtonPalette(Brush(StatusWarning), Brush(StatusWarning), Brush(ForegroundInverse), ForegroundInverse, 8, 28, 10, new Thickness(10, 5)),
+            ButtonKind.DangerMini => new ButtonPalette(Brush(StatusErrorBg), Brush(StatusErrorBg), Brush(StatusError), StatusError, 6, 24, 10, new Thickness(7, 3)),
+            ButtonKind.Mini => new ButtonPalette(Brush(SurfaceSecondary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 6, 24, 10, new Thickness(7, 3)),
+            ButtonKind.Square => new ButtonPalette(Brush(SurfaceSecondary), Brush(SurfaceSecondary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 30, 10, new Thickness(0)),
+            ButtonKind.Code => new ButtonPalette(Brush("#253D29"), Brush("#253D29"), Brush(ForegroundInverse), ForegroundInverse, 999, 20, 9, new Thickness(8, 2)),
+            ButtonKind.FilterSelected => new ButtonPalette(Brush(AccentPrimary), Brush(AccentPrimary), Brush(ForegroundInverse), ForegroundInverse, 999, 30, 10, new Thickness(12, 6)),
+            ButtonKind.Filter => new ButtonPalette(Brush(SurfacePrimary), Brush(BorderSubtle), Brush(ForegroundSecondary), ForegroundSecondary, 999, 30, 10, new Thickness(12, 6)),
+            ButtonKind.Selected => new ButtonPalette(Brush(SurfacePrimary), Brush(SurfacePrimary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 32, 13, new Thickness(9, 0)),
+            ButtonKind.Ghost => new ButtonPalette(Brush("#00000000"), Brush("#00000000"), Brush(ForegroundSecondary), ForegroundSecondary, 8, 32, 13, new Thickness(9, 0)),
+            _ => new ButtonPalette(Brush(SurfacePrimary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 8, 30, 11, new Thickness(12, 6))
+        };
+    }
+
+    private static ButtonPalette ButtonHoverPalette(ButtonKind kind)
+    {
+        return kind switch
+        {
+            ButtonKind.Primary => new ButtonPalette(Brush("#1D4ED8"), Brush("#1D4ED8"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.Dark or ButtonKind.DarkSmall => new ButtonPalette(Brush("#142318"), Brush("#142318"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.DangerMini => new ButtonPalette(Brush("#F9D9D7"), Brush("#F9D9D7"), Brush(StatusError), StatusError, 6, 24, 10, new Thickness(7, 3)),
+            ButtonKind.Mini or ButtonKind.Square or ButtonKind.Secondary => new ButtonPalette(Brush(SurfaceTertiary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.Filter => new ButtonPalette(Brush(SurfaceSecondary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 999, 30, 10, new Thickness(12, 6)),
+            ButtonKind.Ghost => new ButtonPalette(Brush(SurfaceTertiary), Brush(SurfaceTertiary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 32, 13, new Thickness(9, 0)),
+            _ => GetButtonPalette(kind)
         };
     }
 
@@ -839,8 +2129,14 @@ public sealed class MainWindow : Window
             return;
         }
 
-        var normal = ButtonPalette(kind);
+        var normal = GetButtonPalette(kind);
         var hover = ButtonHoverPalette(kind);
+        button.Transitions =
+        [
+            new BrushTransition { Property = Button.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(120) },
+            new BrushTransition { Property = Button.BorderBrushProperty, Duration = TimeSpan.FromMilliseconds(120) },
+            new BrushTransition { Property = Button.ForegroundProperty, Duration = TimeSpan.FromMilliseconds(120) }
+        ];
         button.PointerEntered += (_, _) =>
         {
             button.Background = hover.Background;
@@ -855,56 +2151,36 @@ public sealed class MainWindow : Window
         };
     }
 
-    private static RowStyle RowPalette(RowKind kind)
-    {
-        return kind switch
-        {
-            RowKind.Success => new RowStyle(Brush("#12B76A"), Brush("#D1FADF"), Brush("#F6FEF9"), Brush("#ECFDF3"), Brush("#D1FADF"), Brush("#039855")),
-            RowKind.Warning => new RowStyle(Brush("#F79009"), Brush("#FEDF89"), Brush("#FFFCF5"), Brush("#FFFAEB"), Brush("#FEF0C7"), Brush("#DC6803")),
-            RowKind.Danger => new RowStyle(Brush("#F04438"), Brush("#FECDCA"), Brush("#FFFBFA"), Brush("#FEF3F2"), Brush("#FEE4E2"), Brush("#D92D20")),
-            RowKind.Info => new RowStyle(Brush("#2E90FA"), Brush("#B2DDFF"), Brush("#F5FAFF"), Brush("#EFF8FF"), Brush("#D1E9FF"), Brush("#1570EF")),
-            _ => new RowStyle(Brush("#98A2B3"), Brush("#E4E7EC"), Brushes.White, Brush("#F9FAFB"), Brush("#F2F4F7"), Brush("#667085"))
-        };
-    }
-
-    private static ButtonStyle ButtonPalette(ButtonKind kind)
-    {
-        return kind switch
-        {
-            ButtonKind.Primary => new ButtonStyle(Brush("#1570EF"), Brush("#1570EF"), Brushes.White),
-            ButtonKind.Warning => new ButtonStyle(Brush("#DC6803"), Brush("#DC6803"), Brushes.White),
-            ButtonKind.Dark => new ButtonStyle(Brush("#101828"), Brush("#101828"), Brushes.White),
-            ButtonKind.Ghost => new ButtonStyle(Brush("#00000000"), Brush("#00000000"), Brush("#475467")),
-            _ => new ButtonStyle(Brush("#FFFFFF"), Brush("#D0D5DD"), Brush("#344054"))
-        };
-    }
-
-    private static ButtonStyle ButtonHoverPalette(ButtonKind kind)
-    {
-        return kind switch
-        {
-            ButtonKind.Primary => new ButtonStyle(Brush("#175CD3"), Brush("#175CD3"), Brushes.White),
-            ButtonKind.Warning => new ButtonStyle(Brush("#B54708"), Brush("#B54708"), Brushes.White),
-            ButtonKind.Dark => new ButtonStyle(Brush("#101828"), Brush("#101828"), Brushes.White),
-            ButtonKind.Ghost => new ButtonStyle(Brush("#EAECF0"), Brush("#EAECF0"), Brush("#101828")),
-            _ => new ButtonStyle(Brush("#F9FAFB"), Brush("#98A2B3"), Brush("#101828"))
-        };
-    }
-
-    private static SolidColorBrush Brush(string color)
-    {
-        return new SolidColorBrush(Color.Parse(color));
-    }
-
-    private sealed record RowStyle(
-        IBrush Accent,
-        IBrush Border,
+    private sealed record ButtonPalette(
         IBrush Background,
-        IBrush HoverBackground,
-        IBrush ChipBackground,
-        IBrush ChipForeground);
+        IBrush Border,
+        IBrush Foreground,
+        string ForegroundColor,
+        double Radius,
+        double Height,
+        double FontSize,
+        Thickness Padding);
 
-    private sealed record ButtonStyle(IBrush Background, IBrush Border, IBrush Foreground);
+    private enum CenterPage
+    {
+        Overview,
+        Targets,
+        Activity,
+        Processes,
+        Installations,
+        Logs,
+        Settings
+    }
+
+    private enum LogFilter
+    {
+        All,
+        Mcp,
+        IdaTcp,
+        Plugin,
+        Agent,
+        Error
+    }
 
     private enum RowKind
     {
@@ -919,8 +2195,17 @@ public sealed class MainWindow : Window
     {
         Secondary,
         Primary,
-        Warning,
         Dark,
+        Light,
+        DarkSmall,
+        Warning,
+        DangerMini,
+        Mini,
+        Square,
+        Code,
+        Filter,
+        FilterSelected,
+        Selected,
         Ghost
     }
 }

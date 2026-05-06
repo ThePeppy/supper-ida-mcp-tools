@@ -7,6 +7,8 @@ public sealed record TargetInfo(
     string BinaryName,
     string? InputPath,
     string? DatabasePath,
+    string? IdaVersion,
+    string? Platform,
     DateTimeOffset LastSeenUtc,
     TargetHealth Health);
 

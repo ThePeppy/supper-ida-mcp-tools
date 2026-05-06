@@ -8,6 +8,7 @@ public sealed class App : Application
 {
     public override void Initialize()
     {
+        Name = "Supper IDA MCP Center";
         Styles.Add(new FluentTheme());
     }
 
