@@ -11,3 +11,4 @@
 - Added local dashboard for registered targets, active agent calls, launched processes, installation discovery, and operation logs.
 - Added IDA plugin install and uninstall loader scripts.
 - Added cross-platform desktop center as the product entrypoint with built-in local MCP HTTP endpoint.
+- Added Settings support for plugin install/version checks and Codex/Claude MCP configuration.

@@ -17,6 +17,8 @@ The desktop window shows:
 - discovered IDA installations
 - operation logs
 - close action for registered targets
+- Settings for IDA plugin install/repair/version checks
+- Settings for Codex and Claude MCP configuration
 
 ## Local Endpoints
 
@@ -42,6 +44,15 @@ Only configure the center in the MCP client. Do not configure every IDA window.
 The center exposes stable MCP tools. Each target-specific tool accepts
 `instanceId`, which lets an agent switch freely between multiple open IDA
 windows.
+
+Use the Settings tab to detect and configure supported agents. It currently
+handles:
+
+- Codex CLI / Codex Desktop config at `~/.codex/config.toml`
+- Claude Desktop config files on macOS and Windows
+
+Settings detects legacy `ida-pro-mcp` entries and old plugin loaders so users do
+not accidentally mix incompatible components.
 
 Automation tools can also launch IDA:
 

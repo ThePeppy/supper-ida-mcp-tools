@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using SupperIdaMcp.Center.Core;
+using SupperIdaMcp.Center.Desktop.Setup;
 
 namespace SupperIdaMcp.Center.Desktop;
 
@@ -13,7 +14,9 @@ public sealed class MainWindow : Window
     private readonly StackPanel _processes = new() { Spacing = 8 };
     private readonly StackPanel _installations = new() { Spacing = 8 };
     private readonly StackPanel _logs = new() { Spacing = 8 };
+    private readonly StackPanel _settings = new() { Spacing = 12 };
     private readonly TextBlock _status = new();
+    private string _settingsMessage = string.Empty;
 
     public MainWindow()
     {
@@ -63,7 +66,8 @@ public sealed class MainWindow : Window
                 Tab("Active Calls", Wrap(_activity)),
                 Tab("Processes", Wrap(_processes)),
                 Tab("Installations", Wrap(_installations)),
-                Tab("Operation Log", Wrap(_logs))
+                Tab("Operation Log", Wrap(_logs)),
+                Tab("Settings", Wrap(_settings))
             }
         };
         root.Children.Add(tabs);
@@ -78,6 +82,7 @@ public sealed class MainWindow : Window
         RenderProcesses();
         RenderInstallations();
         RenderLogs();
+        RenderSettings();
     }
 
     private void RenderTargets()
@@ -173,6 +178,102 @@ public sealed class MainWindow : Window
         }
     }
 
+    private void RenderSettings()
+    {
+        _settings.Children.Clear();
+        _settings.Children.Add(SectionTitle("Center"));
+        _settings.Children.Add(Row(
+            "Runtime endpoints",
+            $"MCP HTTP: {RuntimeHolder.McpEndpoint}\nIDA plugin TCP: {RuntimeHolder.TcpEndpoint}\nRepository: {RuntimeHolder.RepositoryPaths.Root ?? "<not discovered>"}"));
+
+        if (!string.IsNullOrWhiteSpace(_settingsMessage))
+        {
+            _settings.Children.Add(Row("Last action", _settingsMessage));
+        }
+
+        RenderPluginSettings();
+        RenderAgentSettings();
+    }
+
+    private void RenderPluginSettings()
+    {
+        var status = RuntimeHolder.PluginInstallService.GetStatus();
+        var installButton = new Button
+        {
+            Content = status.IsCompatible ? "Reinstall" : "Install / Repair",
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        installButton.Click += (_, _) => RunSettingsAction(() =>
+        {
+            var next = RuntimeHolder.PluginInstallService.InstallOrRepair();
+            _settingsMessage = next.Message;
+        });
+
+        var uninstallButton = new Button
+        {
+            Content = "Uninstall",
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        uninstallButton.Click += (_, _) => RunSettingsAction(() =>
+        {
+            var next = RuntimeHolder.PluginInstallService.Uninstall();
+            _settingsMessage = next.Message;
+        });
+
+        _settings.Children.Add(SectionTitle("IDA Plugin"));
+        _settings.Children.Add(Row(
+            status.IsCompatible ? "Installed and compatible" : status.IsInstalled ? "Installed but needs attention" : "Not installed",
+            $"Expected version: {status.ExpectedVersion}\nInstalled version: {status.InstalledVersion ?? "<none>"}\nOurs: {status.IsOurs}\nLoader: {status.LoaderPath}\nSource: {status.SourceRoot ?? "<not discovered>"}\n{status.Message}",
+            new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children = { installButton, uninstallButton }
+            }));
+    }
+
+    private void RenderAgentSettings()
+    {
+        _settings.Children.Add(SectionTitle("Agent MCP Configuration"));
+        foreach (var agent in RuntimeHolder.AgentConfigService.Detect())
+        {
+            var configureButton = new Button
+            {
+                Content = agent.IsConfigured ? "Reconfigure" : "Configure",
+                IsEnabled = agent.CanAutoConfigure,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            configureButton.Click += (_, _) => RunSettingsAction(() =>
+            {
+                var next = RuntimeHolder.AgentConfigService.Configure(agent.AgentName, agent.ConfigPath);
+                _settingsMessage = $"{next.AgentName}: {next.Summary}";
+            });
+
+            _settings.Children.Add(Row(
+                $"{agent.AgentName}  {(agent.IsConfigured ? "Configured" : "Not configured")}",
+                $"Config: {agent.ConfigPath}\nExists: {agent.ConfigExists}\nLegacy config detected: {agent.HasLegacyConfig}\n{agent.Summary}",
+                configureButton));
+        }
+
+        _settings.Children.Add(SectionTitle("Manual Configuration"));
+        _settings.Children.Add(CodeBlock(RuntimeHolder.AgentConfigService.ManualHttpSnippet()));
+        _settings.Children.Add(CodeBlock(RuntimeHolder.AgentConfigService.ManualStdioSnippet()));
+    }
+
+    private void RunSettingsAction(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception exc)
+        {
+            _settingsMessage = exc.Message;
+        }
+
+        Refresh();
+    }
+
     private static TabItem Tab(string title, Control content)
     {
         return new TabItem { Header = title, Content = content };
@@ -190,6 +291,29 @@ public sealed class MainWindow : Window
             Padding = new Thickness(14),
             BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = text }
+        };
+    }
+
+    private static Control SectionTitle(string text)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            FontSize = 16,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+    }
+
+    private static Control CodeBlock(string text)
+    {
+        return new TextBox
+        {
+            Text = text,
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            MinHeight = 120
         };
     }
 

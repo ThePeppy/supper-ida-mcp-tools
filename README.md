@@ -42,3 +42,7 @@ Default endpoints:
 
 - MCP HTTP: `http://127.0.0.1:9401/mcp`
 - IDA plugin TCP: `127.0.0.1:9399`
+
+The desktop Settings tab can install or repair the IDA plugin loader, verify
+that the installed loader belongs to this product/version, and configure Codex
+or Claude MCP settings. See [docs/agent-configuration.md](docs/agent-configuration.md).

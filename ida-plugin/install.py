@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 LOADER_NAME = "supper_ida_mcp_plugin.py"
+PLUGIN_ID = "supper-ida-mcp-plugin"
+PLUGIN_VERSION = "0.1.0"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,6 +64,9 @@ from __future__ import annotations
 import sys
 
 SOURCE_ROOT = {source!r}
+SUPPER_IDA_MCP_PLUGIN_ID = {PLUGIN_ID!r}
+SUPPER_IDA_MCP_PLUGIN_VERSION = {PLUGIN_VERSION!r}
+
 if SOURCE_ROOT not in sys.path:
     sys.path.insert(0, SOURCE_ROOT)
 

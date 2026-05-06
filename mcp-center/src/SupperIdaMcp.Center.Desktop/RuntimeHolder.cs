@@ -1,6 +1,7 @@
 using SupperIdaMcp.Center.Core;
 using SupperIdaMcp.Center.Ida;
 using SupperIdaMcp.Center.Mcp;
+using SupperIdaMcp.Center.Desktop.Setup;
 using SupperIdaMcp.Center.TcpHub;
 
 namespace SupperIdaMcp.Center.Desktop;
@@ -24,6 +25,9 @@ internal static class RuntimeHolder
     public static readonly HttpMcpOptions McpOptions = new(DesktopSettings.Current.Host, DesktopSettings.Current.McpPort, HttpMcpOptions.Default.Path);
     public static readonly IdaTcpHub TcpHub = new(TcpOptions, TargetRegistry);
     public static readonly HttpMcpServer McpServer = new(McpOptions, ToolCatalog, ToolHandler);
+    public static readonly RepositoryPaths RepositoryPaths = RepositoryPaths.Discover();
+    public static readonly PluginInstallService PluginInstallService = new(RepositoryPaths);
+    public static readonly AgentConfigService AgentConfigService = new(RepositoryPaths, McpServer.Url);
 
     private static readonly CancellationTokenSource Shutdown = new();
     private static Task? _tcpTask;
