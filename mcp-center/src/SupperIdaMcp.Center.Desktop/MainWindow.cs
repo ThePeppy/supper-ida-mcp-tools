@@ -15,12 +15,12 @@ namespace SupperIdaMcp.Center.Desktop;
 public sealed class MainWindow : Window
 {
     private readonly Localizer _text = new(AppPreferencesStore.Load().Language);
-    private readonly StackPanel _targets = new() { Spacing = 10 };
-    private readonly StackPanel _activity = new() { Spacing = 10 };
-    private readonly StackPanel _processes = new() { Spacing = 10 };
-    private readonly StackPanel _installations = new() { Spacing = 10 };
-    private readonly StackPanel _logs = new() { Spacing = 10 };
-    private readonly StackPanel _settings = new() { Spacing = 14 };
+    private StackPanel _targets = Panel(10);
+    private StackPanel _activity = Panel(10);
+    private StackPanel _processes = Panel(10);
+    private StackPanel _installations = Panel(10);
+    private StackPanel _logs = Panel(10);
+    private StackPanel _settings = Panel(14);
     private TextBlock _status = new();
     private bool _settingsDirty = true;
     private int _selectedTabIndex;
@@ -205,9 +205,19 @@ public sealed class MainWindow : Window
         AppPreferencesStore.Save(new AppPreferences(language));
         _settingsDirty = true;
         _selectedTabIndex = 5;
-        Content = null;
+        ResetPagePanels();
         Content = BuildLayout();
         Refresh();
+    }
+
+    private void ResetPagePanels()
+    {
+        _targets = Panel(10);
+        _activity = Panel(10);
+        _processes = Panel(10);
+        _installations = Panel(10);
+        _logs = Panel(10);
+        _settings = Panel(14);
     }
 
     private void Refresh()
@@ -579,6 +589,11 @@ public sealed class MainWindow : Window
             },
             Content = content
         };
+    }
+
+    private static StackPanel Panel(double spacing)
+    {
+        return new StackPanel { Spacing = spacing };
     }
 
     private static Control Wrap(Control content)
