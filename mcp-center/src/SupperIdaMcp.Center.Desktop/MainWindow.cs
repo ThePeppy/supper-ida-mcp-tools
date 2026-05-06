@@ -39,7 +39,7 @@ public sealed class MainWindow : Window
     private const string CodeBg = "#17231A";
     private const string CodeBorder = "#2E4233";
 
-    private static readonly FontFamily UiFont = new("avares://SupperIdaMcp.Center.Desktop/Assets/Fonts/NotoSansSC#Noto Sans SC");
+    private static readonly FontFamily UiFont = new("avares://SupperIdaMcp.Center.Desktop/Assets/Fonts/SourceHanSansSC#Source Han Sans SC");
     private static readonly FontFamily DataFont = new("avares://SupperIdaMcp.Center.Desktop/Assets/Fonts/JetBrainsMono#JetBrains Mono");
     private static readonly FontFamily HeadingFont = UiFont;
     private static readonly FontFamily BodyFont = UiFont;
@@ -62,6 +62,9 @@ public sealed class MainWindow : Window
         MinWidth = 1120;
         MinHeight = 720;
         Background = Brush(SurfacePrimary);
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.SubpixelAntialias);
+        TextOptions.SetTextHintingMode(this, TextHintingMode.Strong);
+        TextOptions.SetBaselinePixelAlignment(this, BaselinePixelAlignment.Aligned);
 
         RuntimeHolder.Start();
         Content = BuildLayout();
@@ -81,6 +84,9 @@ public sealed class MainWindow : Window
             ColumnDefinitions = new ColumnDefinitions("232,*"),
             Background = Brush(SurfacePrimary)
         };
+        TextOptions.SetTextRenderingMode(root, TextRenderingMode.SubpixelAntialias);
+        TextOptions.SetTextHintingMode(root, TextHintingMode.Strong);
+        TextOptions.SetBaselinePixelAlignment(root, BaselinePixelAlignment.Aligned);
 
         root.Children.Add(BuildSidebar());
 
@@ -1990,12 +1996,13 @@ public sealed class MainWindow : Window
 
     private static TextBlock Text(string text, double size, FontWeight weight, string color, FontFamily? font = null)
     {
+        var resolvedFont = font ?? BodyFont;
         return new TextBlock
         {
             Text = text,
-            FontFamily = font ?? BodyFont,
+            FontFamily = resolvedFont,
             FontSize = size,
-            FontWeight = weight,
+            FontWeight = EffectiveWeight(size, weight, resolvedFont),
             Foreground = Brush(color),
             TextTrimming = TextTrimming.None,
             VerticalAlignment = VerticalAlignment.Center
@@ -2004,17 +2011,28 @@ public sealed class MainWindow : Window
 
     private static TextBlock CenteredText(string text, double size, FontWeight weight, string color, FontFamily? font = null)
     {
+        var resolvedFont = font ?? BodyFont;
         return new TextBlock
         {
             Text = text,
-            FontFamily = font ?? BodyFont,
+            FontFamily = resolvedFont,
             FontSize = size,
-            FontWeight = weight,
+            FontWeight = EffectiveWeight(size, weight, resolvedFont),
             Foreground = Brush(color),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
+    }
+
+    private static FontWeight EffectiveWeight(double size, FontWeight weight, FontFamily font)
+    {
+        if (weight == FontWeight.Normal && size <= 13 && !font.Equals(DataFont))
+        {
+            return FontWeight.Medium;
+        }
+
+        return weight;
     }
 
     private static Control LineIcon(string name, string color)
