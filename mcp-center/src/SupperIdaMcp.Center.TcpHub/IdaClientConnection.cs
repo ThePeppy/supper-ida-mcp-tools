@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text.Json;
 using SupperIdaMcp.Center.Core;
@@ -10,6 +11,9 @@ public sealed class IdaClientConnection : IDisposable
 {
     private readonly TcpClient _client;
     private readonly TargetRegistry _targetRegistry;
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pendingCalls = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private NetworkStream? _stream;
     private string? _instanceId;
 
     public IdaClientConnection(TcpClient client, TargetRegistry targetRegistry)
@@ -21,6 +25,7 @@ public sealed class IdaClientConnection : IDisposable
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         await using var stream = _client.GetStream();
+        _stream = stream;
         while (!cancellationToken.IsCancellationRequested)
         {
             var message = await LengthPrefixedJsonFraming
@@ -35,14 +40,72 @@ public sealed class IdaClientConnection : IDisposable
         }
     }
 
+    public async Task<JsonElement> InvokeToolAsync(
+        string toolName,
+        JsonElement arguments,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var stream = _stream ?? throw new InvalidOperationException("IDA target is not connected.");
+        var requestId = Guid.NewGuid().ToString("N");
+        var completion = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_pendingCalls.TryAdd(requestId, completion))
+        {
+            throw new InvalidOperationException("Unable to register pending IDA call.");
+        }
+
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var registration = timeoutSource.Token.Register(
+            static state => ((TaskCompletionSource<JsonElement>)state!).TrySetCanceled(),
+            completion);
+        timeoutSource.CancelAfter(timeout);
+
+        try
+        {
+            var message = ProtocolMessage.Create(
+                "tool_call",
+                _instanceId,
+                new
+                {
+                    tool = toolName,
+                    arguments
+                }) with
+            {
+                Id = requestId
+            };
+
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await LengthPrefixedJsonFraming
+                    .WriteAsync(stream, message, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
+
+            return await completion.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            _pendingCalls.TryRemove(requestId, out _);
+        }
+    }
+
     public void Dispose()
     {
         if (_instanceId is not null)
         {
-            _targetRegistry.Remove(_instanceId);
+            _targetRegistry.Remove(_instanceId, this);
         }
 
         _client.Dispose();
+        foreach (var pendingCall in _pendingCalls.Values)
+        {
+            pendingCall.TrySetException(new IOException("IDA target disconnected."));
+        }
     }
 
     private void HandleMessage(ProtocolMessage message)
@@ -54,6 +117,9 @@ public sealed class IdaClientConnection : IDisposable
                 break;
             case "heartbeat":
                 HandleHeartbeat(message);
+                break;
+            case "tool_result":
+                HandleToolResult(message);
                 break;
         }
     }
@@ -73,15 +139,17 @@ public sealed class IdaClientConnection : IDisposable
         }
 
         _instanceId = metadata.InstanceId;
-        _targetRegistry.Upsert(new TargetInfo(
-            metadata.InstanceId,
-            metadata.Alias,
-            metadata.ProcessId,
-            metadata.BinaryName,
-            metadata.InputPath,
-            metadata.DatabasePath,
-            DateTimeOffset.UtcNow,
-            TargetHealth.Healthy));
+        _targetRegistry.Upsert(
+            new TargetInfo(
+                metadata.InstanceId,
+                metadata.Alias,
+                metadata.ProcessId,
+                metadata.BinaryName,
+                metadata.InputPath,
+                metadata.DatabasePath,
+                DateTimeOffset.UtcNow,
+                TargetHealth.Healthy),
+            this);
     }
 
     private void HandleHeartbeat(ProtocolMessage message)
@@ -93,5 +161,21 @@ public sealed class IdaClientConnection : IDisposable
         }
 
         _targetRegistry.MarkHeartbeat(instanceId, DateTimeOffset.UtcNow);
+    }
+
+    private void HandleToolResult(ProtocolMessage message)
+    {
+        if (message.Id is null || !_pendingCalls.TryRemove(message.Id, out var completion))
+        {
+            return;
+        }
+
+        if (message.Payload is null)
+        {
+            completion.TrySetException(new InvalidOperationException("IDA returned an empty tool result."));
+            return;
+        }
+
+        completion.TrySetResult(message.Payload.Value.Clone());
     }
 }

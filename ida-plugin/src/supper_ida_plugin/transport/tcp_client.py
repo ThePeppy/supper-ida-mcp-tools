@@ -13,7 +13,8 @@ from typing import Self
 from supper_ida_plugin.config.constants import DEFAULT_CENTER_HOST, DEFAULT_CENTER_PORT
 from supper_ida_plugin.ida_runtime.metadata import collect_metadata
 from supper_ida_plugin.protocol.framing import encode_message, read_message
-from supper_ida_plugin.protocol.messages import heartbeat, hello
+from supper_ida_plugin.protocol.messages import heartbeat, hello, tool_result
+from supper_ida_plugin.tools.dispatcher import execute_tool
 
 
 class CenterTcpClient:
@@ -95,9 +96,56 @@ class CenterTcpClient:
                 message = read_message(stream)
                 if message is None:
                     raise ConnectionError("center closed the connection")
-                self._handle_message(message)
+                self._handle_message(sock, message)
 
-    def _handle_message(self, message: dict) -> None:
+    def _handle_message(self, sock: socket.socket, message: dict) -> None:
         message_type = message.get("type")
         if message_type == "shutdown":
             self._stop_event.set()
+            return
+
+        if message_type == "tool_call":
+            self._handle_tool_call(sock, message)
+
+    def _handle_tool_call(self, sock: socket.socket, message: dict) -> None:
+        request_id = message.get("id")
+        payload = message.get("payload")
+        if not isinstance(payload, dict):
+            response = tool_result(
+                self.instance_id,
+                request_id,
+                ok=False,
+                error="tool_call payload must be an object",
+            )
+            sock.sendall(encode_message(response))
+            return
+
+        tool_name = payload.get("tool")
+        arguments = payload.get("arguments") or {}
+        if not isinstance(tool_name, str):
+            response = tool_result(
+                self.instance_id,
+                request_id,
+                ok=False,
+                error="tool_call payload.tool must be a string",
+            )
+            sock.sendall(encode_message(response))
+            return
+
+        if not isinstance(arguments, dict):
+            response = tool_result(
+                self.instance_id,
+                request_id,
+                ok=False,
+                error="tool_call payload.arguments must be an object",
+            )
+            sock.sendall(encode_message(response))
+            return
+
+        try:
+            result = execute_tool(tool_name, arguments, self.instance_id)
+            response = tool_result(self.instance_id, request_id, ok=True, result=result)
+        except Exception as exc:
+            response = tool_result(self.instance_id, request_id, ok=False, error=str(exc))
+
+        sock.sendall(encode_message(response))

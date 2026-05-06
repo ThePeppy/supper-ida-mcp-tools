@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SupperIdaMcp.Center.Core\SupperIdaMcp.Center.Core.csproj" />
     <ProjectReference Include="..\SupperIdaMcp.Center.Protocol\SupperIdaMcp.Center.Protocol.csproj" />
+    <ProjectReference Include="..\SupperIdaMcp.Center.TcpHub\SupperIdaMcp.Center.TcpHub.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
