@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SupperIdaMcp.Center.Core\SupperIdaMcp.Center.Core.csproj" />
+    <ProjectReference Include="..\SupperIdaMcp.Center.Protocol\SupperIdaMcp.Center.Protocol.csproj" />
+    <ProjectReference Include="..\SupperIdaMcp.Center.TcpHub\SupperIdaMcp.Center.TcpHub.csproj" />
+    <ProjectReference Include="..\SupperIdaMcp.Center.Mcp\SupperIdaMcp.Center.Mcp.csproj" />
+    <ProjectReference Include="..\SupperIdaMcp.Center.Ida\SupperIdaMcp.Center.Ida.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
