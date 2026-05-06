@@ -40,3 +40,9 @@ dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.
 ```
 
 Dashboard URL: `http://127.0.0.1:9400/`.
+
+Install the IDA plugin loader:
+
+```bash
+python3 ida-plugin/install.py
+```

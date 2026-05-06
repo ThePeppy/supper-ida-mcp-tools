@@ -9,3 +9,4 @@
 - Added core IDA analysis tools for functions, decompilation, disassembly, xrefs, strings, imports, byte reads, text search, renaming, and comments.
 - Added cross-platform IDA discovery, launch, launched process listing, and target close tools.
 - Added local dashboard for registered targets, active agent calls, launched processes, installation discovery, and operation logs.
+- Added IDA plugin install and uninstall loader scripts.
