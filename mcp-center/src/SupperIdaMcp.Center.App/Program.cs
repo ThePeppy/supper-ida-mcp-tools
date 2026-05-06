@@ -1,10 +1,14 @@
 using SupperIdaMcp.Center.Core;
+using SupperIdaMcp.Center.Ida;
 using SupperIdaMcp.Center.Mcp;
 using SupperIdaMcp.Center.TcpHub;
 
 var registry = new TargetRegistry();
 var operationLog = new OperationLogStore();
 var appOptions = ParseOptions(args);
+var idaLocator = new IdaLocator(appOptions.IdaPath);
+var idaProcessRegistry = new IdaProcessRegistry();
+var idaLaunchService = new IdaLaunchService(idaLocator, idaProcessRegistry);
 await using var hub = new IdaTcpHub(appOptions.Hub, registry);
 using var shutdown = new CancellationTokenSource();
 
@@ -20,7 +24,7 @@ if (appOptions.Stdio)
     Console.Error.WriteLine($"Supper IDA MCP Center listening on {appOptions.Hub.Host}:{appOptions.Hub.Port}");
     var mcpServer = new StdioMcpServer(
         new McpToolCatalog(),
-        new IdaMcpToolHandler(registry, operationLog));
+        new IdaMcpToolHandler(registry, operationLog, idaLocator, idaLaunchService));
     await mcpServer
         .RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput(), shutdown.Token)
         .ConfigureAwait(false);
@@ -45,6 +49,7 @@ static AppOptions ParseOptions(string[] args)
     var host = IdaTcpHubOptions.Default.Host;
     var port = IdaTcpHubOptions.Default.Port;
     var stdio = false;
+    string? idaPath = null;
 
     for (var i = 0; i < args.Length; i++)
     {
@@ -60,10 +65,13 @@ static AppOptions ParseOptions(string[] args)
             case "--mcp-stdio":
                 stdio = true;
                 break;
+            case "--ida-path" when i + 1 < args.Length:
+                idaPath = args[++i];
+                break;
         }
     }
 
-    return new AppOptions(new IdaTcpHubOptions(host, port), stdio);
+    return new AppOptions(new IdaTcpHubOptions(host, port), stdio, idaPath);
 }
 
-internal sealed record AppOptions(IdaTcpHubOptions Hub, bool Stdio);
+internal sealed record AppOptions(IdaTcpHubOptions Hub, bool Stdio, string? IdaPath);

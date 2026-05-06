@@ -60,6 +60,59 @@ public sealed class McpToolCatalog
                     },
                     required = new[] { "instanceId" }
                 }),
+            Tool(
+                "ida_find_installations",
+                "Find IDA installations",
+                "Locate IDA executables on the local machine.",
+                new
+                {
+                    type = "object",
+                    properties = new Dictionary<string, object?>
+                    {
+                        ["idaPath"] = new { type = "string", description = "Optional explicit executable, app bundle, or install directory." }
+                    },
+                    required = Array.Empty<string>()
+                }),
+            Tool(
+                "ida_launch_file",
+                "Launch IDA file",
+                "Launch IDA with a selected input file and optionally wait for plugin registration.",
+                new
+                {
+                    type = "object",
+                    properties = new Dictionary<string, object?>
+                    {
+                        ["inputPath"] = new { type = "string", description = "Binary path to open in IDA." },
+                        ["idaPath"] = new { type = "string", description = "Optional explicit executable, app bundle, or install directory." },
+                        ["arguments"] = new { type = "array", items = new { type = "string" }, description = "Additional IDA CLI arguments before inputPath." },
+                        ["waitSeconds"] = new { type = "integer", minimum = 0, maximum = 300, description = "Seconds to wait for the plugin to register the opened file." }
+                    },
+                    required = new[] { "inputPath" }
+                }),
+            Tool(
+                "ida_list_launched_processes",
+                "List launched IDA processes",
+                "List IDA processes started by this center.",
+                new
+                {
+                    type = "object",
+                    properties = new Dictionary<string, object?>(),
+                    required = Array.Empty<string>()
+                }),
+            Tool(
+                "ida_close_target",
+                "Close IDA target",
+                "Close or optionally force-kill one registered IDA window by target id.",
+                new
+                {
+                    type = "object",
+                    properties = new Dictionary<string, object?>
+                    {
+                        ["instanceId"] = new { type = "string", description = "Registered IDA target instance id." },
+                        ["force"] = new { type = "boolean", description = "Kill the process if the window does not close promptly." }
+                    },
+                    required = new[] { "instanceId" }
+                }),
             TargetTool(
                 "ida_list_functions",
                 "List functions",

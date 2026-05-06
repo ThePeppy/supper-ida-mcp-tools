@@ -35,6 +35,40 @@ Arguments:
 
 - `instanceId`: target IDA window id.
 
+### `ida_find_installations`
+
+Lists discovered local IDA executables.
+
+Arguments:
+
+- `idaPath`: optional explicit executable, app bundle, or install directory.
+
+### `ida_launch_file`
+
+Launches IDA with an input file and optionally waits for plugin registration.
+
+Arguments:
+
+- `inputPath`
+- `idaPath`
+- `arguments`
+- `waitSeconds`
+
+### `ida_list_launched_processes`
+
+Lists IDA processes started by this center.
+
+Arguments: none.
+
+### `ida_close_target`
+
+Closes or force-kills one registered target process.
+
+Arguments:
+
+- `instanceId`
+- `force`
+
 ### `ida_call_tool`
 
 Generic executor bridge for center-owned plugin tools.
