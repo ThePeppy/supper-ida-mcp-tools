@@ -13,8 +13,11 @@ def hello(instance_id: str, metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def heartbeat(instance_id: str) -> dict[str, Any]:
-    return {"type": "heartbeat", "instanceId": instance_id}
+def heartbeat(instance_id: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    message: dict[str, Any] = {"type": "heartbeat", "instanceId": instance_id}
+    if metadata is not None:
+        message["payload"] = metadata
+    return message
 
 
 def tool_result(

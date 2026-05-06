@@ -138,18 +138,7 @@ public sealed class IdaClientConnection : IDisposable
             return;
         }
 
-        _instanceId = metadata.InstanceId;
-        _targetRegistry.Upsert(
-            new TargetInfo(
-                metadata.InstanceId,
-                metadata.Alias,
-                metadata.ProcessId,
-                metadata.BinaryName,
-                metadata.InputPath,
-                metadata.DatabasePath,
-                DateTimeOffset.UtcNow,
-                TargetHealth.Healthy),
-            this);
+        UpsertMetadata(metadata);
     }
 
     private void HandleHeartbeat(ProtocolMessage message)
@@ -158,6 +147,17 @@ public sealed class IdaClientConnection : IDisposable
         if (instanceId is null)
         {
             return;
+        }
+
+        if (message.Payload is not null)
+        {
+            var metadata = message.Payload.Value.Deserialize<TargetMetadata>(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            if (metadata is not null)
+            {
+                UpsertMetadata(metadata);
+                return;
+            }
         }
 
         _targetRegistry.MarkHeartbeat(instanceId, DateTimeOffset.UtcNow);
@@ -177,5 +177,11 @@ public sealed class IdaClientConnection : IDisposable
         }
 
         completion.TrySetResult(message.Payload.Value.Clone());
+    }
+
+    private void UpsertMetadata(TargetMetadata metadata)
+    {
+        _instanceId = metadata.InstanceId;
+        _targetRegistry.UpsertMetadata(metadata, this, DateTimeOffset.UtcNow);
     }
 }

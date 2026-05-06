@@ -41,6 +41,27 @@ public sealed class TargetRegistry
         }
     }
 
+    public void UpsertMetadata(TargetMetadata metadata, IdaClientConnection? connection, DateTimeOffset timestampUtc)
+    {
+        lock (_gate)
+        {
+            _targets[metadata.InstanceId] = new TargetInfo(
+                metadata.InstanceId,
+                metadata.Alias,
+                metadata.ProcessId,
+                metadata.BinaryName,
+                metadata.InputPath,
+                metadata.DatabasePath,
+                timestampUtc,
+                TargetHealth.Healthy);
+
+            if (connection is not null)
+            {
+                _connections[metadata.InstanceId] = connection;
+            }
+        }
+    }
+
     public bool Remove(string instanceId, IdaClientConnection? connection = null)
     {
         lock (_gate)

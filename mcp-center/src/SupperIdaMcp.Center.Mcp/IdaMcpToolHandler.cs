@@ -188,6 +188,11 @@ public sealed class IdaMcpToolHandler
             stopwatch.Stop();
             var success = ReadOk(response);
             var error = success ? null : ReadError(response);
+            if (success && string.Equals(pluginToolName, "target.get_metadata", StringComparison.Ordinal))
+            {
+                RefreshTargetMetadata(response);
+            }
+
             _operationLog.Add(new OperationLogEntry(
                 DateTimeOffset.UtcNow,
                 target.InstanceId,
@@ -315,6 +320,24 @@ public sealed class IdaMcpToolHandler
         return response.ValueKind == JsonValueKind.Object
             && response.TryGetProperty("ok", out var ok)
             && ok.ValueKind == JsonValueKind.True;
+    }
+
+    private void RefreshTargetMetadata(JsonElement response)
+    {
+        if (!response.TryGetProperty("result", out var rawResult)
+            || rawResult.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var metadata = rawResult.Deserialize<TargetMetadata>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        if (metadata is null)
+        {
+            return;
+        }
+
+        _targetRegistry.UpsertMetadata(metadata, connection: null, DateTimeOffset.UtcNow);
     }
 
     private static string? ReadError(JsonElement response)

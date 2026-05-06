@@ -86,7 +86,7 @@ class CenterTcpClient:
             while not self._stop_event.is_set():
                 now = time.monotonic()
                 if now >= next_heartbeat:
-                    sock.sendall(encode_message(heartbeat(self.instance_id)))
+                    sock.sendall(encode_message(heartbeat(self.instance_id, collect_metadata(self.instance_id))))
                     next_heartbeat = now + self.heartbeat_interval_sec
 
                 readable, _, _ = select.select([sock], [], [], 0.25)
