@@ -178,6 +178,10 @@ internal sealed partial class PluginInstallService
             "if PLUGIN_DIR not in sys.path:",
             "    sys.path.insert(0, PLUGIN_DIR)",
             string.Empty,
+            "for module_name in list(sys.modules):",
+            "    if module_name == \"supper_ida_plugin\" or module_name.startswith(\"supper_ida_plugin.\"):",
+            "        del sys.modules[module_name]",
+            string.Empty,
             "from supper_ida_plugin.entry import PLUGIN_ENTRY  # noqa: E402,F401",
             string.Empty
         ]);
@@ -188,12 +192,23 @@ internal sealed partial class PluginInstallService
         Directory.CreateDirectory(destination);
         foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
         {
+            if (Path.GetFileName(directory).Equals("__pycache__", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             Directory.CreateDirectory(directory.Replace(source, destination, StringComparison.Ordinal));
         }
 
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
+            if (file.EndsWith(".pyc", StringComparison.Ordinal) || file.Contains($"{Path.DirectorySeparatorChar}__pycache__{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var destinationFile = file.Replace(source, destination, StringComparison.Ordinal);
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationFile) ?? destination);
             File.Copy(file, destinationFile, overwrite: true);
         }
     }

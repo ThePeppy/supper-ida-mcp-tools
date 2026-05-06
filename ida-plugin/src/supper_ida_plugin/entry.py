@@ -6,8 +6,6 @@ for tests and packaging checks.
 
 from __future__ import annotations
 
-from supper_ida_plugin.transport.tcp_client import CenterTcpClient
-
 
 def PLUGIN_ENTRY():  # noqa: N802 - IDA requires this exact name.
     import idaapi  # type: ignore
@@ -18,9 +16,11 @@ def PLUGIN_ENTRY():  # noqa: N802 - IDA requires this exact name.
         help = "Supper IDA MCP executor"
         wanted_name = "Supper IDA MCP"
         wanted_hotkey = ""
-        _client: CenterTcpClient | None = None
+        _client = None
 
         def init(self):
+            from supper_ida_plugin.transport.tcp_client import CenterTcpClient
+
             self._client = CenterTcpClient()
             self._client.start()
             return idaapi.PLUGIN_KEEP

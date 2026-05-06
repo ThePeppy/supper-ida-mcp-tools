@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if package_path.exists():
         shutil.rmtree(package_path)
-    shutil.copytree(package_source, package_path)
+    shutil.copytree(package_source, package_path, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     loader_path.write_text(loader, encoding="utf-8")
     print("Installed Supper IDA MCP plugin. Restart IDA Pro to load it.")
     return 0
@@ -134,6 +134,10 @@ PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 if PLUGIN_DIR not in sys.path:
     sys.path.insert(0, PLUGIN_DIR)
+
+for module_name in list(sys.modules):
+    if module_name == "supper_ida_plugin" or module_name.startswith("supper_ida_plugin."):
+        del sys.modules[module_name]
 
 from supper_ida_plugin.entry import PLUGIN_ENTRY  # noqa: E402,F401
 '''
