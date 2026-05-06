@@ -249,10 +249,10 @@ public sealed class MainWindow : Window
         {
             var closeButton = ActionButton(_text.T("button.close"), () => RuntimeHolder.IdaLaunchService.CloseProcess(target.ProcessId, force: false));
             _targets.Children.Add(Row(
-                target.Alias,
+                TargetTitle(target),
                 _text.F(
                     "target.details",
-                    target.BinaryName,
+                    target.Alias,
                     target.InputPath ?? _text.T("noInputPath"),
                     target.DatabasePath ?? _text.T("noDatabasePath"),
                     target.LastSeenUtc.LocalDateTime.ToString("T", _text.Culture)),
@@ -563,6 +563,19 @@ public sealed class MainWindow : Window
     private string YesNo(bool value)
     {
         return _text.T(value ? "yes" : "no");
+    }
+
+    private static string TargetTitle(TargetInfo target)
+    {
+        return IsFallbackName(target.BinaryName, target.ProcessId)
+            ? target.InputPath ?? target.DatabasePath ?? target.Alias
+            : target.BinaryName;
+    }
+
+    private static bool IsFallbackName(string? value, int processId)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            || processId > 0 && value.Equals($"ida-{processId}", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string HealthKey(TargetHealth health)

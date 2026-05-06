@@ -139,6 +139,7 @@ public sealed class IdaClientConnection : IDisposable
         }
 
         UpsertMetadata(metadata);
+        _ = Task.Run(RefreshMetadataAsync);
     }
 
     private void HandleHeartbeat(ProtocolMessage message)
@@ -183,5 +184,37 @@ public sealed class IdaClientConnection : IDisposable
     {
         _instanceId = metadata.InstanceId;
         _targetRegistry.UpsertMetadata(metadata, this, DateTimeOffset.UtcNow);
+    }
+
+    private async Task RefreshMetadataAsync()
+    {
+        try
+        {
+            var response = await InvokeToolAsync(
+                    "target.get_metadata",
+                    JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),
+                    TimeSpan.FromSeconds(15),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            if (!response.TryGetProperty("ok", out var ok)
+                || ok.ValueKind != JsonValueKind.True
+                || !response.TryGetProperty("result", out var result)
+                || result.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            var metadata = result.Deserialize<TargetMetadata>(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            if (metadata is not null)
+            {
+                UpsertMetadata(metadata);
+            }
+        }
+        catch
+        {
+            // Fallback metadata remains visible; the next heartbeat or agent call can refresh it.
+        }
     }
 }

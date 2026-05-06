@@ -45,13 +45,15 @@ public sealed class TargetRegistry
     {
         lock (_gate)
         {
+            _targets.TryGetValue(metadata.InstanceId, out var current);
+            var normalized = NormalizeMetadata(metadata, current, timestampUtc);
             _targets[metadata.InstanceId] = new TargetInfo(
                 metadata.InstanceId,
-                metadata.Alias,
-                metadata.ProcessId,
-                metadata.BinaryName,
-                metadata.InputPath,
-                metadata.DatabasePath,
+                normalized.Alias,
+                normalized.ProcessId,
+                normalized.BinaryName,
+                normalized.InputPath,
+                normalized.DatabasePath,
                 timestampUtc,
                 TargetHealth.Healthy);
 
@@ -93,5 +95,80 @@ public sealed class TargetRegistry
                 Health = TargetHealth.Healthy
             };
         }
+    }
+
+    private static TargetMetadata NormalizeMetadata(TargetMetadata incoming, TargetInfo? current, DateTimeOffset timestampUtc)
+    {
+        var processId = incoming.ProcessId > 0 ? incoming.ProcessId : current?.ProcessId ?? 0;
+        var inputPath = FirstUseful(incoming.InputPath, current?.InputPath);
+        var databasePath = FirstUseful(incoming.DatabasePath, current?.DatabasePath);
+        var binaryName = FirstUseful(
+            IsFallbackName(incoming.BinaryName, processId) ? null : incoming.BinaryName,
+            FileNameFromPath(inputPath),
+            FileNameFromPath(databasePath),
+            IsFallbackName(current?.BinaryName, processId) ? null : current?.BinaryName,
+            processId > 0 ? $"ida-{processId}" : null) ?? "ida";
+        var alias = FirstUseful(
+            IsFallbackName(incoming.Alias, processId) ? null : incoming.Alias,
+            AliasFromName(binaryName),
+            IsFallbackName(current?.Alias, processId) ? null : current?.Alias,
+            processId > 0 ? $"ida-{processId}" : null) ?? "ida";
+
+        return new TargetMetadata(
+            incoming.InstanceId,
+            alias,
+            processId,
+            binaryName,
+            inputPath,
+            databasePath,
+            incoming.IdaVersion,
+            incoming.Platform);
+    }
+
+    private static string? FirstUseful(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsFallbackName(string? value, int processId)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        return processId > 0 && value.Equals($"ida-{processId}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? FileNameFromPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var normalized = path.Replace('\\', '/');
+        var fileName = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        return string.IsNullOrWhiteSpace(fileName) ? null : fileName;
+    }
+
+    private static string AliasFromName(string name)
+    {
+        var fileName = FileNameFromPath(name) ?? name;
+        var withoutExtension = Path.GetFileNameWithoutExtension(fileName);
+        var source = string.IsNullOrWhiteSpace(withoutExtension) ? fileName : withoutExtension;
+        var alias = new string(source
+            .Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '_')
+            .ToArray())
+            .Trim('_');
+        return string.IsNullOrWhiteSpace(alias) ? "ida" : alias;
     }
 }

@@ -11,6 +11,7 @@ from types import TracebackType
 from typing import Self
 
 from supper_ida_plugin.config.constants import DEFAULT_CENTER_HOST, DEFAULT_CENTER_PORT
+from supper_ida_plugin.executor.ida_thread import run_on_ida_thread
 from supper_ida_plugin.ida_runtime.metadata import collect_metadata
 from supper_ida_plugin.protocol.framing import encode_message, read_message
 from supper_ida_plugin.protocol.messages import heartbeat, hello, tool_result
@@ -78,7 +79,7 @@ class CenterTcpClient:
         with socket.create_connection((self.host, self.port), timeout=5.0) as sock:
             sock.settimeout(None)
             stream = sock.makefile("rwb", buffering=0)
-            metadata = collect_metadata(self.instance_id)
+            metadata = self._collect_metadata()
             sock.sendall(encode_message(hello(self.instance_id, metadata)))
             print(f"[Supper IDA MCP] connected to center {self.host}:{self.port}")
 
@@ -86,7 +87,7 @@ class CenterTcpClient:
             while not self._stop_event.is_set():
                 now = time.monotonic()
                 if now >= next_heartbeat:
-                    sock.sendall(encode_message(heartbeat(self.instance_id, collect_metadata(self.instance_id))))
+                    sock.sendall(encode_message(heartbeat(self.instance_id, self._collect_metadata())))
                     next_heartbeat = now + self.heartbeat_interval_sec
 
                 readable, _, _ = select.select([sock], [], [], 0.25)
@@ -149,3 +150,6 @@ class CenterTcpClient:
             response = tool_result(self.instance_id, request_id, ok=False, error=str(exc))
 
         sock.sendall(encode_message(response))
+
+    def _collect_metadata(self) -> dict:
+        return run_on_ida_thread(lambda: collect_metadata(self.instance_id))
