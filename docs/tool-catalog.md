@@ -49,6 +49,132 @@ Current plugin executor tools:
 
 - `target.ping`
 - `target.get_metadata`
+- `analysis.list_functions`
+- `analysis.get_function`
+- `analysis.decompile`
+- `analysis.disassemble`
+- `analysis.xrefs`
+- `analysis.list_strings`
+- `analysis.list_imports`
+- `analysis.get_bytes`
+- `analysis.search_text`
+- `analysis.rename`
+- `analysis.set_comment`
+
+## Analysis Tools
+
+### `ida_list_functions`
+
+Lists functions from one target database.
+
+Arguments:
+
+- `instanceId`
+- `offset`
+- `count`
+- `filter`
+
+### `ida_get_function`
+
+Resolves one function by address, name, or address inside the function.
+
+Arguments:
+
+- `instanceId`
+- `query`
+
+### `ida_decompile`
+
+Decompiles one function through Hex-Rays.
+
+Arguments:
+
+- `instanceId`
+- `query`
+
+### `ida_disassemble`
+
+Returns disassembly lines for one function.
+
+Arguments:
+
+- `instanceId`
+- `query`
+- `maxLines`
+
+### `ida_xrefs`
+
+Lists code xrefs to, from, or both directions for one address.
+
+Arguments:
+
+- `instanceId`
+- `query`
+- `direction`
+- `max`
+
+### `ida_list_strings`
+
+Lists strings from one target database.
+
+Arguments:
+
+- `instanceId`
+- `offset`
+- `count`
+- `filter`
+
+### `ida_list_imports`
+
+Lists imports from one target database.
+
+Arguments:
+
+- `instanceId`
+- `offset`
+- `count`
+- `filter`
+
+### `ida_get_bytes`
+
+Reads raw bytes from one target database.
+
+Arguments:
+
+- `instanceId`
+- `address`
+- `size`
+
+### `ida_search_text`
+
+Regex-searches generated disassembly text.
+
+Arguments:
+
+- `instanceId`
+- `pattern`
+- `max`
+
+### `ida_rename`
+
+Renames an address or function.
+
+Arguments:
+
+- `instanceId`
+- `address`
+- `newName`
+
+### `ida_set_comment`
+
+Sets a regular or repeatable comment.
+
+Arguments:
+
+- `instanceId`
+- `address`
+- `text`
+- `repeatable`
 
 ### `ida_operation_log`
 

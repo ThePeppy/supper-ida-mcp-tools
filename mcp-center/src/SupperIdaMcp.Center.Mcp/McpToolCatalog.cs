@@ -60,6 +60,118 @@ public sealed class McpToolCatalog
                     },
                     required = new[] { "instanceId" }
                 }),
+            TargetTool(
+                "ida_list_functions",
+                "List functions",
+                "List functions from one IDA database.",
+                new Dictionary<string, object?>
+                {
+                    ["offset"] = new { type = "integer", description = "Pagination offset.", minimum = 0 },
+                    ["count"] = new { type = "integer", description = "Maximum rows to return.", minimum = 1, maximum = 1000 },
+                    ["filter"] = new { type = "string", description = "Optional case-insensitive function name filter." }
+                }),
+            TargetTool(
+                "ida_get_function",
+                "Get function",
+                "Resolve one function by address or name.",
+                new Dictionary<string, object?>
+                {
+                    ["query"] = new { type = "string", description = "Function address, name, or address inside the function." }
+                },
+                "query"),
+            TargetTool(
+                "ida_decompile",
+                "Decompile function",
+                "Decompile one function in a selected IDA window.",
+                new Dictionary<string, object?>
+                {
+                    ["query"] = new { type = "string", description = "Function address, name, or address inside the function." }
+                },
+                "query"),
+            TargetTool(
+                "ida_disassemble",
+                "Disassemble function",
+                "Return disassembly lines for one function.",
+                new Dictionary<string, object?>
+                {
+                    ["query"] = new { type = "string", description = "Function address, name, or address inside the function." },
+                    ["maxLines"] = new { type = "integer", description = "Maximum disassembly lines.", minimum = 1, maximum = 5000 }
+                },
+                "query"),
+            TargetTool(
+                "ida_xrefs",
+                "List xrefs",
+                "List code references to or from an address.",
+                new Dictionary<string, object?>
+                {
+                    ["query"] = new { type = "string", description = "Address or symbol name." },
+                    ["direction"] = new { type = "string", @enum = new[] { "to", "from", "both" }, description = "Reference direction." },
+                    ["max"] = new { type = "integer", description = "Maximum xrefs.", minimum = 1, maximum = 5000 }
+                },
+                "query"),
+            TargetTool(
+                "ida_list_strings",
+                "List strings",
+                "List strings from one IDA database.",
+                new Dictionary<string, object?>
+                {
+                    ["offset"] = new { type = "integer", description = "Pagination offset.", minimum = 0 },
+                    ["count"] = new { type = "integer", description = "Maximum rows to return.", minimum = 1, maximum = 1000 },
+                    ["filter"] = new { type = "string", description = "Optional case-insensitive text filter." }
+                }),
+            TargetTool(
+                "ida_list_imports",
+                "List imports",
+                "List imports from one IDA database.",
+                new Dictionary<string, object?>
+                {
+                    ["offset"] = new { type = "integer", description = "Pagination offset.", minimum = 0 },
+                    ["count"] = new { type = "integer", description = "Maximum rows to return.", minimum = 1, maximum = 1000 },
+                    ["filter"] = new { type = "string", description = "Optional case-insensitive import or module filter." }
+                }),
+            TargetTool(
+                "ida_get_bytes",
+                "Read bytes",
+                "Read raw bytes from one IDA database.",
+                new Dictionary<string, object?>
+                {
+                    ["address"] = new { type = "string", description = "Address or symbol name." },
+                    ["size"] = new { type = "integer", description = "Byte count.", minimum = 1, maximum = 1048576 }
+                },
+                "address"),
+            TargetTool(
+                "ida_search_text",
+                "Search disassembly text",
+                "Regex search over generated disassembly text.",
+                new Dictionary<string, object?>
+                {
+                    ["pattern"] = new { type = "string", description = "Case-insensitive regular expression." },
+                    ["max"] = new { type = "integer", description = "Maximum hits.", minimum = 1, maximum = 1000 }
+                },
+                "pattern"),
+            TargetTool(
+                "ida_rename",
+                "Rename address",
+                "Rename an address or function in one IDA database.",
+                new Dictionary<string, object?>
+                {
+                    ["address"] = new { type = "string", description = "Address or symbol name." },
+                    ["newName"] = new { type = "string", description = "New IDA name." }
+                },
+                "address",
+                "newName"),
+            TargetTool(
+                "ida_set_comment",
+                "Set comment",
+                "Set a regular or repeatable comment at one address.",
+                new Dictionary<string, object?>
+                {
+                    ["address"] = new { type = "string", description = "Address or symbol name." },
+                    ["text"] = new { type = "string", description = "Comment text." },
+                    ["repeatable"] = new { type = "boolean", description = "Use repeatable comment slot." }
+                },
+                "address",
+                "text"),
             Tool(
                 "ida_call_tool",
                 "Call IDA tool",
@@ -104,5 +216,30 @@ public sealed class McpToolCatalog
             title,
             description,
             JsonSerializer.SerializeToElement(inputSchema, JsonOptions));
+    }
+
+    private static McpToolDefinition TargetTool(
+        string name,
+        string title,
+        string description,
+        Dictionary<string, object?> properties,
+        params string[] requiredProperties)
+    {
+        properties = new Dictionary<string, object?>(properties, StringComparer.OrdinalIgnoreCase)
+        {
+            ["instanceId"] = new { type = "string", description = "Registered IDA target instance id." }
+        };
+
+        var required = new[] { "instanceId" }.Concat(requiredProperties).ToArray();
+        return Tool(
+            name,
+            title,
+            description,
+            new
+            {
+                type = "object",
+                properties,
+                required
+            });
     }
 }

@@ -36,6 +36,28 @@ public sealed class IdaMcpToolHandler
                     .ConfigureAwait(false),
                 "ida_get_metadata" => await InvokeTargetToolAsync(arguments, "target.get_metadata", EmptyObject(), cancellationToken)
                     .ConfigureAwait(false),
+                "ida_list_functions" => await InvokeTargetToolAsync(arguments, "analysis.list_functions", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_get_function" => await InvokeTargetToolAsync(arguments, "analysis.get_function", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_decompile" => await InvokeTargetToolAsync(arguments, "analysis.decompile", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_disassemble" => await InvokeTargetToolAsync(arguments, "analysis.disassemble", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_xrefs" => await InvokeTargetToolAsync(arguments, "analysis.xrefs", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_list_strings" => await InvokeTargetToolAsync(arguments, "analysis.list_strings", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_list_imports" => await InvokeTargetToolAsync(arguments, "analysis.list_imports", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_get_bytes" => await InvokeTargetToolAsync(arguments, "analysis.get_bytes", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_search_text" => await InvokeTargetToolAsync(arguments, "analysis.search_text", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_rename" => await InvokeTargetToolAsync(arguments, "analysis.rename", arguments, cancellationToken)
+                    .ConfigureAwait(false),
+                "ida_set_comment" => await InvokeTargetToolAsync(arguments, "analysis.set_comment", arguments, cancellationToken)
+                    .ConfigureAwait(false),
                 "ida_call_tool" => await CallTargetToolAsync(arguments, cancellationToken).ConfigureAwait(false),
                 "ida_operation_log" => ListOperationLog(arguments),
                 _ => Error($"Unknown tool: {toolName}")
