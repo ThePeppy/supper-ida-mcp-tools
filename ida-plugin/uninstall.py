@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from install import LOADER_NAME, default_plugins_dir
+from install import LOADER_NAME, PACKAGE_NAME, PLUGIN_ID, default_plugins_dir
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,16 +16,28 @@ def main(argv: list[str] | None = None) -> int:
 
     plugins_dir = Path(args.plugins_dir).expanduser() if args.plugins_dir else default_plugins_dir()
     loader_path = plugins_dir / LOADER_NAME
+    package_path = plugins_dir / PACKAGE_NAME
     print(f"Loader path: {loader_path}")
+    print(f"Package path: {package_path}")
 
     if args.dry_run:
         return 0
 
     if loader_path.exists():
+        content = loader_path.read_text(encoding="utf-8")
+        if PLUGIN_ID not in content and "supper_ida_plugin" not in content:
+            raise SystemExit(f"Refusing to remove a loader that is not ours: {loader_path}")
+
         loader_path.unlink()
         print("Uninstalled Supper IDA MCP plugin loader.")
     else:
         print("Plugin loader is not installed.")
+
+    if package_path.exists():
+        import shutil
+
+        shutil.rmtree(package_path)
+        print("Uninstalled Supper IDA MCP plugin package.")
 
     return 0
 

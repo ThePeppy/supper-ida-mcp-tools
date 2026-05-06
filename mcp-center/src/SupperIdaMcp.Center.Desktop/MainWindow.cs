@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using SupperIdaMcp.Center.Core;
 using SupperIdaMcp.Center.Desktop.Setup;
@@ -37,6 +38,7 @@ public sealed class MainWindow : Window
     private Control BuildLayout()
     {
         var root = new DockPanel();
+        Background = new SolidColorBrush(Color.Parse("#F4F6FA"));
         var header = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
@@ -47,8 +49,8 @@ public sealed class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = "Supper IDA MCP Center", FontSize = 22, FontWeight = Avalonia.Media.FontWeight.SemiBold },
-                new TextBlock { Text = $"MCP: {RuntimeHolder.McpEndpoint}    IDA TCP: {RuntimeHolder.TcpEndpoint}", FontSize = 13 }
+                new TextBlock { Text = "Supper IDA MCP Center", FontSize = 24, FontWeight = FontWeight.SemiBold, Foreground = Brushes.Black },
+                new TextBlock { Text = $"MCP: {RuntimeHolder.McpEndpoint}    IDA TCP: {RuntimeHolder.TcpEndpoint}", FontSize = 13, Foreground = new SolidColorBrush(Color.Parse("#475467")) }
             }
         });
         Grid.SetColumn(_status, 1);
@@ -209,6 +211,14 @@ public sealed class MainWindow : Window
             _settingsMessage = next.Message;
         });
 
+        var actionButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        actionButtons.Children.Add(installButton);
+
         var uninstallButton = new Button
         {
             Content = "Uninstall",
@@ -219,17 +229,40 @@ public sealed class MainWindow : Window
             var next = RuntimeHolder.PluginInstallService.Uninstall();
             _settingsMessage = next.Message;
         });
+        actionButtons.Children.Add(uninstallButton);
+
+        if (status.Warnings.Count > 0)
+        {
+            var archiveButton = new Button
+            {
+                Content = "Archive legacy",
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            archiveButton.Click += (_, _) => RunSettingsAction(() =>
+            {
+                var next = RuntimeHolder.PluginInstallService.ArchiveLegacyPlugins();
+                _settingsMessage = next.Warnings.Count == 0
+                    ? "Legacy IDA MCP plugin files were archived. Restart IDA Pro to reload plugins."
+                    : next.Message;
+            });
+            actionButtons.Children.Add(archiveButton);
+        }
+
+        var kind = status.IsCompatible && status.Warnings.Count == 0
+            ? RowKind.Success
+            : status.Warnings.Count > 0
+                ? RowKind.Warning
+                : RowKind.Danger;
 
         _settings.Children.Add(SectionTitle("IDA Plugin"));
+        var warnings = status.Warnings.Count == 0
+            ? "No legacy or misplaced loaders detected."
+            : string.Join("\n", status.Warnings);
         _settings.Children.Add(Row(
             status.IsCompatible ? "Installed and compatible" : status.IsInstalled ? "Installed but needs attention" : "Not installed",
-            $"Expected version: {status.ExpectedVersion}\nInstalled version: {status.InstalledVersion ?? "<none>"}\nOurs: {status.IsOurs}\nLoader: {status.LoaderPath}\nSource: {status.SourceRoot ?? "<not discovered>"}\n{status.Message}",
-            new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Children = { installButton, uninstallButton }
-            }));
+            $"Expected version: {status.ExpectedVersion}\nInstalled version: {status.InstalledVersion ?? "<none>"}\nOurs: {status.IsOurs}\nLoader: {status.LoaderPath}\nPackage: {status.PackagePath}\nSource: {status.SourceRoot ?? "<not discovered>"}\n{status.Message}\n{warnings}",
+            actionButtons,
+            kind));
     }
 
     private void RenderAgentSettings()
@@ -289,8 +322,16 @@ public sealed class MainWindow : Window
         return new Border
         {
             Padding = new Thickness(14),
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.Parse("#D0D5DD")),
             BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = text }
+            CornerRadius = new CornerRadius(8),
+            Child = new TextBlock
+            {
+                Text = text,
+                Foreground = new SolidColorBrush(Color.Parse("#475467")),
+                TextWrapping = TextWrapping.Wrap
+            }
         };
     }
 
@@ -300,7 +341,8 @@ public sealed class MainWindow : Window
         {
             Text = text,
             FontSize = 16,
-            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.Parse("#101828")),
             Margin = new Thickness(0, 8, 0, 0)
         };
     }
@@ -313,24 +355,43 @@ public sealed class MainWindow : Window
             IsReadOnly = true,
             AcceptsReturn = true,
             TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            MinHeight = 120
+            MinHeight = 120,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.Parse("#D0D5DD")),
+            FontFamily = new FontFamily("Menlo, Consolas, monospace"),
+            FontSize = 12,
+            Padding = new Thickness(10)
         };
     }
 
-    private static Control Row(string title, string details, Control? action = null)
+    private static Control Row(string title, string details, Control? action = null, RowKind kind = RowKind.Neutral)
     {
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             Margin = new Thickness(0, 0, 0, 4)
         };
+        var (border, background) = RowPalette(kind);
         grid.Children.Add(new StackPanel
         {
-            Spacing = 4,
+            Spacing = 6,
             Children =
             {
-                new TextBlock { Text = title, FontWeight = Avalonia.Media.FontWeight.SemiBold, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                new TextBlock { Text = details, TextWrapping = Avalonia.Media.TextWrapping.Wrap }
+                new TextBlock
+                {
+                    Text = title,
+                    FontWeight = FontWeight.SemiBold,
+                    FontSize = 14,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.Parse("#101828"))
+                },
+                new TextBlock
+                {
+                    Text = details,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.Parse("#475467")),
+                    LineHeight = 19
+                }
             }
         });
 
@@ -344,9 +405,33 @@ public sealed class MainWindow : Window
 
         return new Border
         {
-            Padding = new Thickness(12),
+            Padding = new Thickness(14),
+            Background = background,
+            BorderBrush = border,
             BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
             Child = grid
         };
+    }
+
+    private static (IBrush Border, IBrush Background) RowPalette(RowKind kind)
+    {
+        return kind switch
+        {
+            RowKind.Success => (new SolidColorBrush(Color.Parse("#12B76A")), new SolidColorBrush(Color.Parse("#F6FEF9"))),
+            RowKind.Warning => (new SolidColorBrush(Color.Parse("#F79009")), new SolidColorBrush(Color.Parse("#FFFCF5"))),
+            RowKind.Danger => (new SolidColorBrush(Color.Parse("#F04438")), new SolidColorBrush(Color.Parse("#FFFBFA"))),
+            RowKind.Info => (new SolidColorBrush(Color.Parse("#2E90FA")), new SolidColorBrush(Color.Parse("#F5FAFF"))),
+            _ => (new SolidColorBrush(Color.Parse("#D0D5DD")), Brushes.White)
+        };
+    }
+
+    private enum RowKind
+    {
+        Neutral,
+        Info,
+        Success,
+        Warning,
+        Danger
     }
 }
