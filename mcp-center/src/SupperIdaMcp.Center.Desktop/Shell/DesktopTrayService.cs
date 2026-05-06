@@ -44,6 +44,7 @@ internal sealed class DesktopTrayService : IDisposable
                 Menu = menu,
                 ToolTipText = _text.T("tray.tooltip")
             };
+            MacOSProperties.SetIsTemplateIcon(_trayIcon, true);
             _trayIcon.Clicked += OnTrayClicked;
 
             _trayIcons = new TrayIcons { _trayIcon };

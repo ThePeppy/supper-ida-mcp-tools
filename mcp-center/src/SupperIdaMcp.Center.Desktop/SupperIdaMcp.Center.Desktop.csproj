@@ -14,7 +14,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="..\..\..\images\Icon-iOS-ClearDark-1024x1024@1x.png" Link="Assets\AppIcon\tray-icon.png" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
