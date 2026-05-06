@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -17,6 +18,7 @@ public sealed class MainWindow : Window
     private readonly StackPanel _logs = new() { Spacing = 8 };
     private readonly StackPanel _settings = new() { Spacing = 12 };
     private readonly TextBlock _status = new();
+    private bool _settingsDirty = true;
     private string _settingsMessage = string.Empty;
 
     public MainWindow()
@@ -84,7 +86,11 @@ public sealed class MainWindow : Window
         RenderProcesses();
         RenderInstallations();
         RenderLogs();
-        RenderSettings();
+        if (_settingsDirty)
+        {
+            RenderSettings();
+            _settingsDirty = false;
+        }
     }
 
     private void RenderTargets()
@@ -209,6 +215,7 @@ public sealed class MainWindow : Window
         {
             var next = RuntimeHolder.PluginInstallService.InstallOrRepair();
             _settingsMessage = next.Message;
+            _settingsDirty = true;
         });
 
         var actionButtons = new StackPanel
@@ -228,6 +235,7 @@ public sealed class MainWindow : Window
         {
             var next = RuntimeHolder.PluginInstallService.Uninstall();
             _settingsMessage = next.Message;
+            _settingsDirty = true;
         });
         actionButtons.Children.Add(uninstallButton);
 
@@ -244,6 +252,7 @@ public sealed class MainWindow : Window
                 _settingsMessage = next.Warnings.Count == 0
                     ? "Legacy IDA MCP plugin files were archived. Restart IDA Pro to reload plugins."
                     : next.Message;
+                _settingsDirty = true;
             });
             actionButtons.Children.Add(archiveButton);
         }
@@ -280,6 +289,7 @@ public sealed class MainWindow : Window
             {
                 var next = RuntimeHolder.AgentConfigService.Configure(agent.AgentName, agent.ConfigPath);
                 _settingsMessage = $"{next.AgentName}: {next.Summary}";
+                _settingsDirty = true;
             });
 
             _settings.Children.Add(Row(
@@ -302,6 +312,7 @@ public sealed class MainWindow : Window
         catch (Exception exc)
         {
             _settingsMessage = exc.Message;
+            _settingsDirty = true;
         }
 
         Refresh();
@@ -314,7 +325,14 @@ public sealed class MainWindow : Window
 
     private static Control Wrap(Control content)
     {
-        return new ScrollViewer { Content = content, Padding = new Thickness(4) };
+        content.Margin = new Thickness(0, 0, 24, 36);
+        return new ScrollViewer
+        {
+            Content = content,
+            Padding = new Thickness(4, 0, 24, 32),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
     }
 
     private static Control Empty(string text)
@@ -349,18 +367,22 @@ public sealed class MainWindow : Window
 
     private static Control CodeBlock(string text)
     {
-        return new TextBox
+        return new Border
         {
-            Text = text,
-            IsReadOnly = true,
-            AcceptsReturn = true,
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            MinHeight = 120,
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.Parse("#D0D5DD")),
-            FontFamily = new FontFamily("Menlo, Consolas, monospace"),
-            FontSize = 12,
-            Padding = new Thickness(10)
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12),
+            Child = new SelectableTextBlock
+            {
+                Text = text,
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = new FontFamily("Menlo, Consolas, monospace"),
+                FontSize = 12,
+                Foreground = Brushes.Black,
+                LineHeight = 18
+            }
         };
     }
 
