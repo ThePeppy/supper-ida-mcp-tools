@@ -6,6 +6,7 @@
     <ProjectReference Include="..\SupperIdaMcp.Center.TcpHub\SupperIdaMcp.Center.TcpHub.csproj" />
     <ProjectReference Include="..\SupperIdaMcp.Center.Mcp\SupperIdaMcp.Center.Mcp.csproj" />
     <ProjectReference Include="..\SupperIdaMcp.Center.Ida\SupperIdaMcp.Center.Ida.csproj" />
+    <ProjectReference Include="..\SupperIdaMcp.Center.Dashboard\SupperIdaMcp.Center.Dashboard.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

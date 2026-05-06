@@ -19,3 +19,11 @@ dotnet run --project src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj
 ```
 
 Default TCP hub: `127.0.0.1:9399`.
+
+Dashboard mode:
+
+```bash
+dotnet run --project src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui
+```
+
+Default dashboard URL: `http://127.0.0.1:9400/`.

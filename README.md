@@ -32,3 +32,11 @@ dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.
 ```
 
 The TCP hub listens on `127.0.0.1:9399` by default.
+
+Run with the local dashboard:
+
+```bash
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui
+```
+
+Dashboard URL: `http://127.0.0.1:9400/`.

@@ -39,6 +39,31 @@ Automation tools can also launch IDA:
 - `ida_list_launched_processes`
 - `ida_close_target`
 
+## Local Dashboard
+
+Start the optional dashboard:
+
+```bash
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui
+```
+
+Default dashboard URL: `http://127.0.0.1:9400/`.
+
+Override the dashboard port:
+
+```bash
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui --ui-port 9401
+```
+
+The dashboard shows:
+
+- registered IDA windows and health
+- active agent calls
+- launched IDA processes
+- discovered IDA installations
+- operation logs
+- close action for registered targets
+
 ## Console Diagnostics Mode
 
 For local diagnostics without MCP stdio:

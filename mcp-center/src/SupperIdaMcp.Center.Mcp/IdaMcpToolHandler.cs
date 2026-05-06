@@ -15,17 +15,20 @@ public sealed class IdaMcpToolHandler
 
     private readonly TargetRegistry _targetRegistry;
     private readonly OperationLogStore _operationLog;
+    private readonly ActiveOperationStore _activeOperations;
     private readonly IdaLocator _idaLocator;
     private readonly IdaLaunchService _idaLaunchService;
 
     public IdaMcpToolHandler(
         TargetRegistry targetRegistry,
         OperationLogStore operationLog,
+        ActiveOperationStore activeOperations,
         IdaLocator idaLocator,
         IdaLaunchService idaLaunchService)
     {
         _targetRegistry = targetRegistry;
         _operationLog = operationLog;
+        _activeOperations = activeOperations;
         _idaLocator = idaLocator;
         _idaLaunchService = idaLaunchService;
     }
@@ -176,6 +179,7 @@ public sealed class IdaMcpToolHandler
         }
 
         var stopwatch = Stopwatch.StartNew();
+        var activeOperation = _activeOperations.Begin(target.InstanceId, target.Alias, pluginToolName);
         try
         {
             var response = await connection
@@ -207,6 +211,10 @@ public sealed class IdaMcpToolHandler
                 stopwatch.Elapsed,
                 exc.Message));
             return Error(exc.Message);
+        }
+        finally
+        {
+            _activeOperations.End(activeOperation.OperationId);
         }
     }
 
