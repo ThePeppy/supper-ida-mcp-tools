@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using SupperIdaMcp.Center.Core;
 using SupperIdaMcp.Center.Desktop.Localization;
@@ -76,7 +77,7 @@ public sealed class MainWindow : Window
 
         var root = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("224,*"),
+            ColumnDefinitions = new ColumnDefinitions("232,*"),
             Background = Brush(SurfacePrimary)
         };
 
@@ -94,12 +95,11 @@ public sealed class MainWindow : Window
     {
         var sidebar = new StackPanel
         {
-            Spacing = 12,
+            Spacing = 14,
             Children =
             {
                 BuildIdentity(),
                 BuildNavigation(),
-                new Border { Height = 1, Background = Brush(BorderSubtle), Opacity = 0.55 },
                 BuildRuntimeCard(),
                 new Border { Height = double.NaN, VerticalAlignment = VerticalAlignment.Stretch },
                 BuildBridgeStatusCard()
@@ -108,8 +108,8 @@ public sealed class MainWindow : Window
 
         return new Border
         {
-            Width = 224,
-            Padding = new Thickness(14, 10),
+            Width = 232,
+            Padding = new Thickness(18, 14),
             Background = Brush(SurfaceSecondary),
             Child = sidebar
         };
@@ -119,23 +119,23 @@ public sealed class MainWindow : Window
     {
         return new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("30,*"),
+            ColumnDefinitions = new ColumnDefinitions("34,*"),
             Height = 42,
-            ColumnSpacing = 9,
+            ColumnSpacing = 10,
             Children =
             {
                 new Border
                 {
-                    Width = 30,
-                    Height = 30,
+                    Width = 34,
+                    Height = 34,
                     CornerRadius = new CornerRadius(8),
                     Background = Brush(SurfaceInverse),
                     VerticalAlignment = VerticalAlignment.Center,
-                    Child = CenteredText("S", 14, FontWeight.Bold, ForegroundInverse, HeadingFont)
+                    Child = CenteredText("IDA", 10, FontWeight.SemiBold, ForegroundInverse, DataFont)
                 },
                 Stack(Orientation.Vertical, 1,
-                    Text(_text.T("brand.title"), 14, FontWeight.SemiBold, ForegroundPrimary, HeadingFont),
-                    Text(_text.T("brand.subtitle"), 11, FontWeight.Normal, ForegroundMuted))
+                    Text(_text.T("brand.title"), 15, FontWeight.Bold, ForegroundPrimary, HeadingFont),
+                    Text(_text.T("brand.subtitle"), 12, FontWeight.Normal, ForegroundSecondary, CaptionFont))
             }
         }.WithColumn(1, childIndex: 1);
     }
@@ -143,6 +143,7 @@ public sealed class MainWindow : Window
     private Control BuildNavigation()
     {
         var panel = Stack(Orientation.Vertical, 3);
+        panel.Children.Add(Text(_text.T("sidebar.navigation"), 12, FontWeight.Normal, ForegroundMuted, CaptionFont));
         foreach (var page in Enum.GetValues<CenterPage>())
         {
             panel.Children.Add(NavButton(page));
@@ -156,10 +157,10 @@ public sealed class MainWindow : Window
         var selected = _selectedPage == page;
         var button = new Button
         {
-            Height = 32,
+            Height = 34,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(9, 0),
-            Background = selected ? Brush(SurfacePrimary) : Brushes.Transparent,
+            Background = selected ? Brush(SurfaceInverse) : Brush(SurfacePrimary),
             Foreground = selected ? Brush(ForegroundPrimary) : Brush(ForegroundSecondary),
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0),
@@ -167,13 +168,13 @@ public sealed class MainWindow : Window
             Cursor = new Cursor(StandardCursorType.Hand),
             Content = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("16,*"),
-                ColumnSpacing = 10,
+                ColumnDefinitions = new ColumnDefinitions("15,*"),
+                ColumnSpacing = 8,
                 VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    CenteredText(NavGlyph(page), 12, FontWeight.SemiBold, selected ? AccentPrimary : ForegroundMuted, DataFont),
-                    Text(PageTitle(page), 13, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundPrimary : ForegroundSecondary)
+                    LineIcon(NavGlyph(page), selected ? ForegroundInverse : ForegroundSecondary).WithColumn(0),
+                    Text(PageTitle(page), 13, selected ? FontWeight.SemiBold : FontWeight.Normal, selected ? ForegroundInverse : ForegroundSecondary)
                         .WithColumn(1)
                 }
             }
@@ -187,41 +188,45 @@ public sealed class MainWindow : Window
     {
         var targets = RuntimeHolder.TargetRegistry.ListTargets();
         var healthy = targets.Count(target => target.Health == TargetHealth.Healthy);
-        var active = RuntimeHolder.ActiveOperations.List().Count;
+        var status = RuntimeHolder.IsRunning
+            ? _text.T("sidebar.localServiceOnline")
+            : _text.T("sidebar.localServiceOffline");
+        var meta = RuntimeHolder.IsRunning
+            ? CompactEndpoint(RuntimeHolder.McpEndpoint)
+            : _text.F("sidebar.windowHealth", healthy, targets.Count);
 
-        return SectionCard(
-            Stack(Orientation.Vertical, 10,
-                Text(_text.T("sidebar.runtime"), 12, FontWeight.Normal, ForegroundMuted, CaptionFont),
-                RuntimeLine(_text.T("sidebar.mcp"), RuntimeHolder.IsRunning ? _text.T("status.live") : _text.T("status.offline"), StatusOnline),
-                RuntimeLine(_text.T("sidebar.idaTcp"), $"{healthy}/{targets.Count}", targets.Count == 0 ? ForegroundMuted : StatusOnline),
-                RuntimeLine(_text.T("sidebar.agent"), active == 0 ? _text.T("status.idle") : _text.F("status.busyCount", active), active == 0 ? StatusWarning : AccentBlue)),
-            padding: new Thickness(12));
-    }
-
-    private Control RuntimeLine(string label, string value, string color)
-    {
-        return new Grid
+        return new Border
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-            ColumnSpacing = 8,
-            Children =
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 8),
+            Background = Brush(SurfacePrimary),
+            Child = new Grid
             {
-                Dot(color).WithColumn(0),
-                Text(label, 11, FontWeight.Normal, ForegroundSecondary).WithColumn(1),
-                Text(value, 10, FontWeight.Medium, color, DataFont).WithColumn(2)
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                ColumnSpacing = 8,
+                Children =
+                {
+                    Dot(RuntimeHolder.IsRunning ? StatusOnline : StatusError).WithColumn(0),
+                    Stack(Orientation.Vertical, 1,
+                        Text(status, 12, FontWeight.SemiBold, ForegroundPrimary),
+                        Text(meta, 11, FontWeight.Normal, ForegroundMuted, DataFont))
+                        .WithColumn(1)
+                }
             }
         };
     }
 
     private Control BuildBridgeStatusCard()
     {
-        return SectionCard(
-            Stack(Orientation.Vertical, 6,
-                Stack(Orientation.Horizontal, 7,
-                    Dot(StatusOnline),
-                    Text(_text.T("sidebar.bridgeConfigured"), 11, FontWeight.Normal, ForegroundPrimary)),
-                Text(_text.T("sidebar.bridgeMeta"), 10, FontWeight.Normal, ForegroundMuted, DataFont)),
-            padding: new Thickness(10));
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 8),
+            Background = Brush(SurfacePrimary),
+            Child = Stack(Orientation.Vertical, 6,
+                Text(_text.T("sidebar.workspace"), 12, FontWeight.Normal, ForegroundMuted, CaptionFont),
+                Text(ProductInfo.AgentServerName, 11, FontWeight.Normal, ForegroundPrimary, DataFont))
+        };
     }
 
     private void SelectPage(CenterPage page)
@@ -290,7 +295,7 @@ public sealed class MainWindow : Window
 
         var contentGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("1.25*,0.9*"),
+            ColumnDefinitions = new ColumnDefinitions("634,*"),
             ColumnSpacing = 14,
             Children =
             {
@@ -316,14 +321,12 @@ public sealed class MainWindow : Window
     {
         var statusText = RuntimeHolder.IsRunning ? _text.T("overview.serverOnline") : _text.T("overview.serverOffline");
         var badgeText = RuntimeHolder.IsRunning ? _text.T("status.normal") : _text.T("status.error");
-        var badgeKind = RuntimeHolder.IsRunning ? RowKind.Success : RowKind.Danger;
-
         var restart = ActionButton(_text.T("button.restartBridge"), () =>
         {
             _settingsMessage = _text.T("action.restartBridgeHint");
             _settingsDirty = true;
             return Task.CompletedTask;
-        }, ButtonKind.Light);
+        }, ButtonKind.Green);
 
         return new Border
         {
@@ -335,33 +338,31 @@ public sealed class MainWindow : Window
                 new Grid
                 {
                     ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-                    Children =
-                    {
-                        Stack(Orientation.Vertical, 5,
-                            Text(_text.T("overview.serviceStatus"), 11, FontWeight.Normal, "#B6C4B8", CaptionFont),
-                            Text(statusText, 26, FontWeight.Bold, ForegroundInverse, HeadingFont),
-                            Text(_text.T("overview.serviceBody"), 12, FontWeight.Normal, "#DDE9DF"))
-                            .WithColumn(0),
-                        Chip(badgeText, badgeKind).WithColumn(1)
-                    }
-                },
-                Stack(Orientation.Horizontal, 8,
-                    SummaryPill(_text.T("overview.port"), DesktopSettings.Current.McpPort.ToString(), dark: true),
-                    SummaryPill(_text.T("overview.latency"), _text.T("overview.localLatency"), dark: true),
-                    SummaryPill(_text.T("overview.queue"), activeOps.ToString(), dark: true)),
-                new Grid
-                {
-                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    ColumnSpacing = 12,
                     Children =
                     {
                         Stack(Orientation.Vertical, 4,
-                            Text(_text.T("overview.activeEndpoint"), 11, FontWeight.Normal, "#B6C4B8", CaptionFont),
-                            Text(RuntimeHolder.McpEndpoint, 12, FontWeight.Normal, "#DDE9DF", DataFont))
+                            Text(_text.T("overview.serviceStatus"), 12, FontWeight.Normal, "#FFFFFFB8", CaptionFont),
+                            Text(statusText, 28, FontWeight.Bold, ForegroundInverse, HeadingFont),
+                            Text(_text.T("overview.serviceBody"), 13, FontWeight.Normal, "#DDE3DD").Wrap())
+                            .WithColumn(0),
+                        StatusPill(badgeText, RuntimeHolder.IsRunning).WithColumn(1)
+                    }
+                },
+                SummaryMetricRow(activeOps),
+                new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    ColumnSpacing = 12,
+                    Children =
+                    {
+                        Stack(Orientation.Vertical, 2,
+                            Text(_text.T("overview.activeEndpoint"), 12, FontWeight.Normal, "#FFFFFFA8", CaptionFont),
+                            Text(RuntimeHolder.McpEndpoint, 12, FontWeight.Normal, ForegroundInverse, DataFont))
                             .WithColumn(0),
                         restart.WithColumn(1)
                     }
-                },
-                Text(_text.F("overview.connectedSummary", healthy, targetCount), 12, FontWeight.Normal, "#B6C4B8"))
+                })
         };
     }
 
@@ -379,6 +380,39 @@ public sealed class MainWindow : Window
         grid.Children.Add(OverviewMetric(_text.T("overview.metricBridge"), _text.F("overview.windowsCount", healthy), _text.F("overview.lastHeartbeat", BestHeartbeat()), RowKind.Success).At(0, 1));
         grid.Children.Add(OverviewMetric(_text.T("overview.metricTools"), tools.ToString(), _text.T("overview.metricToolsBody"), RowKind.Warning).At(1, 0));
         grid.Children.Add(OverviewMetric(_text.T("overview.metricCalls"), activeOps == 0 ? _text.T("status.idle") : activeOps.ToString(), _text.T("overview.metricCallsBody"), RowKind.Neutral).At(1, 1));
+        return grid;
+    }
+
+    private Control StatusPill(string text, bool healthy)
+    {
+        return new Border
+        {
+            Height = 30,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7),
+            Background = Brush(healthy ? "#345237" : StatusErrorBg),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = Stack(Orientation.Horizontal, 7,
+                Dot(healthy ? StatusOnline : StatusError),
+                Text(text.ToUpperInvariant(), 11, FontWeight.SemiBold, healthy ? ForegroundInverse : StatusError, DataFont))
+        };
+    }
+
+    private Control SummaryMetricRow(int activeOps)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*"),
+            ColumnSpacing = 10,
+            Height = 78,
+            Children =
+            {
+                SummaryPill(_text.T("overview.port"), DesktopSettings.Current.McpPort.ToString()).WithColumn(0),
+                SummaryPill(_text.T("overview.latency"), _text.T("overview.localLatency")).WithColumn(1),
+                SummaryPill(_text.T("overview.queue"), activeOps.ToString()).WithColumn(2)
+            }
+        };
+
         return grid;
     }
 
@@ -497,23 +531,44 @@ public sealed class MainWindow : Window
         var warning = targets.Count(target => target.Health is TargetHealth.Unreachable or TargetHealth.Unknown);
 
         var content = Stack(Orientation.Vertical, 14,
+            BuildTargetsToolbar(),
             BuildTargetsMetrics(targets.Length, healthy, warning, activeOps.FirstOrDefault()?.TargetAlias),
             BuildTargetsTable(targets, activeOps));
 
-        return PageScaffold(
-            BuildToolbar(
-                _text.T("page.targets.title"),
-                _text.T("page.targets.subtitle"),
-                Stack(Orientation.Horizontal, 8,
-                    SearchPlaceholder(_text.T("search.targets"), 260),
-                    SegmentedStatusFilters(),
-                    ActionButton(_text.T("button.refreshMetadata"), RefreshAllMetadataAsync, ButtonKind.Dark))),
-            new Border
+        return new Border
+        {
+            Padding = new Thickness(20),
+            Background = Brush(SurfacePrimary),
+            Child = content
+        };
+    }
+
+    private Control BuildTargetsToolbar()
+    {
+        return new Border
+        {
+            Height = 74,
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12, 16),
+            Background = Brush(SurfaceSecondary),
+            Child = new Grid
             {
-                Padding = new Thickness(20),
-                Background = Brush(SurfacePrimary),
-                Child = content
-            });
+                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                ColumnSpacing = 12,
+                Children =
+                {
+                    Stack(Orientation.Vertical, 3,
+                        Text(_text.T("page.targets.title"), 26, FontWeight.Bold, ForegroundPrimary, HeadingFont),
+                        Text(_text.T("page.targets.subtitle"), 13, FontWeight.Normal, ForegroundSecondary))
+                        .WithColumn(0),
+                    Stack(Orientation.Horizontal, 8,
+                        SearchPlaceholder(_text.T("search.targets"), 260),
+                        SegmentedStatusFilters(),
+                        ActionButton(_text.T("button.refreshMetadata"), RefreshAllMetadataAsync, ButtonKind.Dark))
+                        .WithColumn(1)
+                }
+            }
+        };
     }
 
     private Control BuildTargetsMetrics(int total, int healthy, int warning, string? activeAlias)
@@ -585,13 +640,13 @@ public sealed class MainWindow : Window
     private Control TargetTableRow(TargetInfo target, bool active)
     {
         var grid = TargetGrid();
-        AddTargetCell(grid, TargetTitle(target), 0, strong: true, font: DataFont);
-        AddTargetCell(grid, target.Alias, 1, font: DataFont);
-        AddTargetCell(grid, target.ProcessId.ToString(), 2, font: DataFont);
-        AddTargetCell(grid, CompactPlatform(target), 3, font: DataFont);
-        AddTargetCell(grid, CompactPath(target.InputPath), 4, font: DataFont, tooltip: target.InputPath);
-        AddTargetCell(grid, CompactPath(target.DatabasePath), 5, font: DataFont, tooltip: target.DatabasePath);
-        AddTargetCell(grid, LastSeen(target.LastSeenUtc), 6, font: DataFont, color: target.Health == TargetHealth.Healthy ? ForegroundSecondary : StatusWarning);
+        AddTargetCell(grid, TargetTitle(target), 0, strong: true, font: BodyFont, size: 12);
+        AddTargetCell(grid, target.Alias, 1, font: DataFont, color: ForegroundSecondary, size: 10.5);
+        AddTargetCell(grid, target.ProcessId.ToString(), 2, font: DataFont, size: 10.5);
+        AddTargetCell(grid, CompactPlatform(target), 3, font: DataFont, size: 10.5);
+        AddTargetCell(grid, CompactPath(target.InputPath), 4, font: DataFont, color: ForegroundSecondary, tooltip: target.InputPath, size: 9.3);
+        AddTargetCell(grid, CompactPath(target.DatabasePath), 5, font: DataFont, color: ForegroundSecondary, tooltip: target.DatabasePath, size: 9.3);
+        AddTargetCell(grid, LastSeen(target.LastSeenUtc), 6, font: DataFont, color: target.Health == TargetHealth.Healthy ? ForegroundPrimary : StatusWarning, size: 10.5);
         grid.Children.Add(HealthBadge(target.Health).WithColumn(7));
         grid.Children.Add(TargetActions(target).WithColumn(8));
 
@@ -616,7 +671,7 @@ public sealed class MainWindow : Window
     {
         return new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("1.18*,0.82*,56,82,1.28*,1.18*,82,92,214"),
+            ColumnDefinitions = new ColumnDefinitions("118,82,50,62,145,135,68,72,*"),
             ColumnSpacing = 8,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -630,11 +685,12 @@ public sealed class MainWindow : Window
         bool strong = false,
         FontFamily? font = null,
         string? color = null,
-        string? tooltip = null)
+        string? tooltip = null,
+        double? size = null)
     {
         var block = Text(
             string.IsNullOrWhiteSpace(text) ? "-" : text,
-            isHeader ? 10 : 11,
+            size ?? (isHeader ? 12 : 11),
             isHeader || strong ? FontWeight.SemiBold : FontWeight.Normal,
             color ?? (isHeader ? ForegroundMuted : ForegroundPrimary),
             font ?? (isHeader ? CaptionFont : BodyFont))
@@ -650,11 +706,11 @@ public sealed class MainWindow : Window
 
     private Control TargetActions(TargetInfo target)
     {
-        return Stack(Orientation.Horizontal, 5,
-            MiniButton(_text.T("button.ping"), () => CallTargetToolAsync("ida_ping_target", target.InstanceId, _text.T("action.pingSent"))),
-            MiniButton(_text.T("button.refreshShort"), () => CallTargetToolAsync("ida_get_metadata", target.InstanceId, _text.T("action.metadataRefreshed"))),
-            MiniButton(_text.T("button.openShort"), () => OpenTargetInIdaAsync(target), enabled: !string.IsNullOrWhiteSpace(target.InputPath)),
-            MiniButton(_text.T("button.close"), () => CallTargetCloseAsync(target), kind: ButtonKind.DangerMini));
+        return Stack(Orientation.Horizontal, 4,
+            TargetActionButton(_text.T("button.ping"), 34, () => CallTargetToolAsync("ida_ping_target", target.InstanceId, _text.T("action.pingSent"))),
+            TargetActionButton(_text.T("button.refreshShort"), 58, () => CallTargetToolAsync("ida_get_metadata", target.InstanceId, _text.T("action.metadataRefreshed"))),
+            TargetActionButton(_text.T("button.openShort"), 44, () => OpenTargetInIdaAsync(target), enabled: !string.IsNullOrWhiteSpace(target.InputPath)),
+            TargetActionButton(_text.T("button.close"), 44, () => CallTargetCloseAsync(target), kind: ButtonKind.DangerMini));
     }
 
     private Control BuildActivityPage()
@@ -821,24 +877,45 @@ public sealed class MainWindow : Window
             }
         };
 
-        return PageScaffold(
-            BuildToolbar(
-                _text.T("page.logs.title"),
-                _text.T("page.logs.subtitle"),
-                Stack(Orientation.Horizontal, 8,
-                    SearchPlaceholder(_text.T("search.logs"), 250),
-                    ActionButton(_text.T("button.copy"), CopyLogsAsync, ButtonKind.DarkSmall),
-                    ActionButton(_text.T("button.clear"), () =>
+        return new Border
+        {
+            Padding = new Thickness(16),
+            Background = Brush(SurfacePrimary),
+            Child = Stack(Orientation.Vertical, 14, BuildLogToolbar(), content)
+        };
+    }
+
+    private Control BuildLogToolbar()
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Vertical, 12,
+                new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    ColumnSpacing = 12,
+                    Children =
                     {
-                        _settingsMessage = _text.T("action.clearLogUnavailable");
-                        return Task.CompletedTask;
-                    }, ButtonKind.DangerMini))),
-            new Border
-            {
-                Padding = new Thickness(16),
-                Background = Brush(SurfacePrimary),
-                Child = Stack(Orientation.Vertical, 14, BuildLogFilters(), content)
-            });
+                        Stack(Orientation.Vertical, 2,
+                            Text(_text.T("page.logs.title"), 24, FontWeight.Bold, ForegroundPrimary, HeadingFont),
+                            Text(_text.T("page.logs.subtitle"), 13, FontWeight.Normal, ForegroundSecondary))
+                            .WithColumn(0),
+                        Stack(Orientation.Horizontal, 8,
+                            SearchPlaceholder(_text.T("search.logs"), 276, height: 36, radius: 12, fontSize: 13, showIcon: true),
+                            ActionButton(_text.T("button.copy"), CopyLogsAsync, ButtonKind.ActionDark),
+                            ActionButton(_text.T("button.clear"), () =>
+                            {
+                                _settingsMessage = _text.T("action.clearLogUnavailable");
+                                return Task.CompletedTask;
+                            }, ButtonKind.Clear))
+                            .WithColumn(1)
+                    }
+                },
+                BuildLogFilters())
+        };
     }
 
     private Control BuildLogFilters()
@@ -1215,7 +1292,7 @@ public sealed class MainWindow : Window
         return new Border
         {
             Height = 58,
-            Padding = new Thickness(18, 12),
+            Padding = new Thickness(14, 18),
             Background = Brush(SurfacePrimary),
             Child = new Grid
             {
@@ -1235,15 +1312,23 @@ public sealed class MainWindow : Window
 
     private Control ToolbarEndpointControls(bool includeSettings)
     {
+        if (!includeSettings)
+        {
+            return Stack(Orientation.Horizontal, 8,
+                EnvironmentChip(),
+                CompactEndpointChip(),
+                RefreshButton(dark: true));
+        }
+
         var controls = Stack(Orientation.Horizontal, 8,
             EndpointChip("MCP", RuntimeHolder.McpEndpoint),
             EndpointChip("IDA TCP", RuntimeHolder.TcpEndpoint),
             LanguageMiniSwitch(),
-            RefreshButton());
+            RefreshButton(dark: false));
 
         if (includeSettings)
         {
-            controls.Children.Add(SmallSquareButton("*", () =>
+            controls.Children.Add(IconButton("sliders-horizontal", () =>
             {
                 _settingsDirty = true;
                 RenderSelectedPage(force: true);
@@ -1252,6 +1337,32 @@ public sealed class MainWindow : Window
         }
 
         return controls;
+    }
+
+    private Control EnvironmentChip()
+    {
+        return new Border
+        {
+            Height = 30,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7),
+            Background = Brush(SurfaceSecondary),
+            Child = Stack(Orientation.Horizontal, 7,
+                Dot(StatusOnline),
+                Text("dev", 11, FontWeight.SemiBold, ForegroundPrimary, DataFont))
+        };
+    }
+
+    private Control CompactEndpointChip()
+    {
+        return new Border
+        {
+            Height = 30,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7),
+            Background = Brush(SurfaceSecondary),
+            Child = Text(CompactEndpoint(RuntimeHolder.McpEndpoint), 11, FontWeight.Normal, ForegroundSecondary, DataFont)
+        };
     }
 
     private Control LanguageMiniSwitch()
@@ -1287,14 +1398,14 @@ public sealed class MainWindow : Window
         return button;
     }
 
-    private Control RefreshButton()
+    private Control RefreshButton(bool dark)
     {
-        return SmallSquareButton("R", () =>
+        return IconButton("refresh-cw", () =>
         {
             _settingsDirty = true;
             Refresh(force: true);
             return Task.CompletedTask;
-        });
+        }, dark ? ButtonKind.DarkSquare : ButtonKind.Square);
     }
 
     private Control PageScaffold(Control toolbar, Control content)
@@ -1494,18 +1605,16 @@ public sealed class MainWindow : Window
         };
     }
 
-    private Control SummaryPill(string label, string value, bool dark)
+    private Control SummaryPill(string label, string value)
     {
         return new Border
         {
-            Width = 154,
-            Height = 62,
             CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12, 8),
-            Background = Brush(dark ? "#304934" : SurfacePrimary),
+            Padding = new Thickness(11),
+            Background = Brush("#304934"),
             Child = Stack(Orientation.Vertical, 4,
-                Text(label, 10, FontWeight.Normal, dark ? "#B6C4B8" : ForegroundMuted, CaptionFont),
-                Text(value, 18, FontWeight.Bold, dark ? ForegroundInverse : ForegroundPrimary, DataFont))
+                Text(label.ToUpperInvariant(), 11, FontWeight.Normal, "#FFFFFFA8", CaptionFont),
+                Text(value, 23, FontWeight.SemiBold, ForegroundInverse, DataFont))
         };
     }
 
@@ -1537,18 +1646,24 @@ public sealed class MainWindow : Window
             });
     }
 
-    private Control SearchPlaceholder(string text, double width)
+    private Control SearchPlaceholder(string text, double width, double height = 34, double radius = 8, double fontSize = 12, bool showIcon = false)
     {
+        Control content = showIcon
+            ? Stack(Orientation.Horizontal, 8,
+                LineIcon("search", ForegroundMuted),
+                Text(text, fontSize, FontWeight.Normal, ForegroundMuted))
+            : Text(text, fontSize, FontWeight.Normal, ForegroundMuted);
+
         return new Border
         {
             Width = width,
-            Height = 34,
-            CornerRadius = new CornerRadius(8),
+            Height = height,
+            CornerRadius = new CornerRadius(radius),
             Background = Brush(SurfacePrimary),
             BorderBrush = Brush(BorderSubtle),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(10, 8),
-            Child = Text(text, 11, FontWeight.Normal, ForegroundMuted)
+            Child = content
         };
     }
 
@@ -1637,6 +1752,26 @@ public sealed class MainWindow : Window
         return ActionButton(text, action, kind, enabled);
     }
 
+    private Button TargetActionButton(string text, double width, Func<Task> action, ButtonKind kind = ButtonKind.Mini, bool enabled = true)
+    {
+        var button = ActionButton(text, action, kind, enabled);
+        button.Width = width;
+        button.MinWidth = width;
+        button.Padding = new Thickness(0);
+        return button;
+    }
+
+    private Button IconButton(string iconName, Func<Task> action, ButtonKind kind = ButtonKind.Square, bool enabled = true)
+    {
+        var palette = GetButtonPalette(kind);
+        var button = ActionButton(string.Empty, action, kind, enabled);
+        button.Width = palette.Height;
+        button.MinWidth = palette.Height;
+        button.Padding = new Thickness(0);
+        button.Content = LineIcon(iconName, palette.ForegroundColor);
+        return button;
+    }
+
     private Button SmallSquareButton(string text, Func<Task> action)
     {
         var button = ActionButton(text, action, ButtonKind.Square);
@@ -1722,6 +1857,43 @@ public sealed class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center
+        };
+    }
+
+    private static Control LineIcon(string name, string color)
+    {
+        return new Viewbox
+        {
+            Width = 15,
+            Height = 15,
+            Stretch = Stretch.Uniform,
+            Child = new Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse(IconGeometry(name)),
+                Stroke = Brush(color),
+                StrokeThickness = 2,
+                StrokeLineCap = PenLineCap.Round,
+                StrokeJoin = PenLineJoin.Round,
+                Fill = Brushes.Transparent
+            }
+        };
+    }
+
+    private static string IconGeometry(string name)
+    {
+        return name switch
+        {
+            "layout-dashboard" => "M3 3H10V10H3V3ZM14 3H21V8H14V3ZM14 12H21V21H14V12ZM3 14H10V21H3V14Z",
+            "app-window" => "M4 5H20V18H4V5ZM4 9H20",
+            "activity" => "M3 12H7L10 5L14 19L17 12H21",
+            "cpu" => "M9 9H15V15H9V9ZM4 10H7M4 14H7M17 10H20M17 14H20M10 4V7M14 4V7M10 17V20M14 17V20",
+            "package" => "M5 6H19L21 16H3L5 6ZM7 19H17",
+            "scroll-text" => "M8 6H21M8 12H21M8 18H21M4 6H4.01M4 12H4.01M4 18H4.01",
+            "settings" => "M12 8A4 4 0 1 0 12 16A4 4 0 1 0 12 8ZM12 2V5M12 19V22M2 12H5M19 12H22M4.9 4.9L7 7M17 17L19.1 19.1M19.1 4.9L17 7M7 17L4.9 19.1",
+            "search" => "M11 4A7 7 0 1 0 11 18A7 7 0 1 0 11 4ZM16 16L21 21",
+            "refresh-cw" => "M21 12A9 9 0 0 1 6 18.7M3 12A9 9 0 0 1 18 5.3M18 2V6H22M2 18H6V22",
+            "sliders-horizontal" => "M4 7H10M14 7H20M10 7A2 2 0 1 0 14 7A2 2 0 1 0 10 7ZM4 17H6M10 17H20M6 17A2 2 0 1 0 10 17A2 2 0 1 0 6 17Z",
+            _ => "M4 12H20"
         };
     }
 
@@ -1970,6 +2142,14 @@ public sealed class MainWindow : Window
         return normalized[..Math.Min(prefixLength, normalized.Length)] + "/.../" + file;
     }
 
+    private static string CompactEndpoint(string endpoint)
+    {
+        return endpoint
+            .Replace("http://", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("https://", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("/mcp", string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string CompactPlatform(TargetInfo target)
     {
         var platform = target.Platform;
@@ -2052,14 +2232,14 @@ public sealed class MainWindow : Window
     {
         return page switch
         {
-            CenterPage.Overview => "O",
-            CenterPage.Targets => "W",
-            CenterPage.Activity => "A",
-            CenterPage.Processes => "P",
-            CenterPage.Installations => "I",
-            CenterPage.Logs => "L",
-            CenterPage.Settings => "S",
-            _ => "-"
+            CenterPage.Overview => "layout-dashboard",
+            CenterPage.Targets => "app-window",
+            CenterPage.Activity => "activity",
+            CenterPage.Processes => "cpu",
+            CenterPage.Installations => "package",
+            CenterPage.Logs => "scroll-text",
+            CenterPage.Settings => "settings",
+            _ => "line"
         };
     }
 
@@ -2093,12 +2273,16 @@ public sealed class MainWindow : Window
         {
             ButtonKind.Primary => new ButtonPalette(Brush(AccentBlue), Brush(AccentBlue), Brush(ForegroundInverse), AccentBlue, 8, 30, 11, new Thickness(12, 6)),
             ButtonKind.Dark => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 11, new Thickness(12, 8)),
+            ButtonKind.Green => new ButtonPalette(Brush(AccentPrimary), Brush(AccentPrimary), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 12, new Thickness(12, 9)),
+            ButtonKind.ActionDark => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 12, 36, 13, new Thickness(12, 8)),
+            ButtonKind.Clear => new ButtonPalette(Brush(SurfacePrimary), Brush(BorderSubtle), Brush(StatusError), StatusError, 12, 36, 13, new Thickness(12, 8)),
             ButtonKind.Light => new ButtonPalette(Brush(SurfacePrimary), Brush(SurfacePrimary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 28, 11, new Thickness(10, 5)),
             ButtonKind.DarkSmall => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 8, 28, 10, new Thickness(10, 5)),
             ButtonKind.Warning => new ButtonPalette(Brush(StatusWarning), Brush(StatusWarning), Brush(ForegroundInverse), ForegroundInverse, 8, 28, 10, new Thickness(10, 5)),
-            ButtonKind.DangerMini => new ButtonPalette(Brush(StatusErrorBg), Brush(StatusErrorBg), Brush(StatusError), StatusError, 6, 24, 10, new Thickness(7, 3)),
-            ButtonKind.Mini => new ButtonPalette(Brush(SurfaceSecondary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 6, 24, 10, new Thickness(7, 3)),
+            ButtonKind.DangerMini => new ButtonPalette(Brush(SurfaceTertiary), Brush(SurfaceTertiary), Brush(StatusError), StatusError, 8, 26, 10, new Thickness(7, 3)),
+            ButtonKind.Mini => new ButtonPalette(Brush(SurfaceSecondary), Brush(SurfaceSecondary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 26, 10, new Thickness(7, 3)),
             ButtonKind.Square => new ButtonPalette(Brush(SurfaceSecondary), Brush(SurfaceSecondary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 30, 10, new Thickness(0)),
+            ButtonKind.DarkSquare => new ButtonPalette(Brush(SurfaceInverse), Brush(SurfaceInverse), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 10, new Thickness(0)),
             ButtonKind.Code => new ButtonPalette(Brush("#253D29"), Brush("#253D29"), Brush(ForegroundInverse), ForegroundInverse, 999, 20, 9, new Thickness(8, 2)),
             ButtonKind.FilterSelected => new ButtonPalette(Brush(AccentPrimary), Brush(AccentPrimary), Brush(ForegroundInverse), ForegroundInverse, 999, 30, 10, new Thickness(12, 6)),
             ButtonKind.Filter => new ButtonPalette(Brush(SurfacePrimary), Brush(BorderSubtle), Brush(ForegroundSecondary), ForegroundSecondary, 999, 30, 10, new Thickness(12, 6)),
@@ -2113,9 +2297,12 @@ public sealed class MainWindow : Window
         return kind switch
         {
             ButtonKind.Primary => new ButtonPalette(Brush("#1D4ED8"), Brush("#1D4ED8"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
-            ButtonKind.Dark or ButtonKind.DarkSmall => new ButtonPalette(Brush("#142318"), Brush("#142318"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 11, new Thickness(12, 6)),
-            ButtonKind.DangerMini => new ButtonPalette(Brush("#F9D9D7"), Brush("#F9D9D7"), Brush(StatusError), StatusError, 6, 24, 10, new Thickness(7, 3)),
-            ButtonKind.Mini or ButtonKind.Square or ButtonKind.Secondary => new ButtonPalette(Brush(SurfaceTertiary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 8, 30, 11, new Thickness(12, 6)),
+            ButtonKind.Green => new ButtonPalette(Brush("#255C35"), Brush("#255C35"), Brush(ForegroundInverse), ForegroundInverse, 8, 34, 12, new Thickness(12, 9)),
+            ButtonKind.Dark or ButtonKind.DarkSmall or ButtonKind.ActionDark => new ButtonPalette(Brush("#142318"), Brush("#142318"), Brush(ForegroundInverse), ForegroundInverse, 12, 36, 13, new Thickness(12, 8)),
+            ButtonKind.Clear => new ButtonPalette(Brush(StatusErrorBg), Brush(StatusError), Brush(StatusError), StatusError, 12, 36, 13, new Thickness(12, 8)),
+            ButtonKind.DangerMini => new ButtonPalette(Brush("#DDE3DD"), Brush("#DDE3DD"), Brush(StatusError), StatusError, 8, 26, 10, new Thickness(7, 3)),
+            ButtonKind.DarkSquare => new ButtonPalette(Brush("#142318"), Brush("#142318"), Brush(ForegroundInverse), ForegroundInverse, 8, 30, 10, new Thickness(0)),
+            ButtonKind.Mini or ButtonKind.Square or ButtonKind.Secondary => new ButtonPalette(Brush(SurfaceTertiary), Brush(SurfaceTertiary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 30, 11, new Thickness(12, 6)),
             ButtonKind.Filter => new ButtonPalette(Brush(SurfaceSecondary), Brush(BorderSubtle), Brush(ForegroundPrimary), ForegroundPrimary, 999, 30, 10, new Thickness(12, 6)),
             ButtonKind.Ghost => new ButtonPalette(Brush(SurfaceTertiary), Brush(SurfaceTertiary), Brush(ForegroundPrimary), ForegroundPrimary, 8, 32, 13, new Thickness(9, 0)),
             _ => GetButtonPalette(kind)
@@ -2196,12 +2383,16 @@ public sealed class MainWindow : Window
         Secondary,
         Primary,
         Dark,
+        Green,
+        ActionDark,
+        Clear,
         Light,
         DarkSmall,
         Warning,
         DangerMini,
         Mini,
         Square,
+        DarkSquare,
         Code,
         Filter,
         FilterSelected,
