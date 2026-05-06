@@ -5,9 +5,9 @@
 ```text
 MCP Client / Agent
         |
-        | MCP
+        | local MCP HTTP
         v
-mcp-center (.NET)
+mcp-center desktop app (.NET)
         |
         | TCP JSON-RPC
         v
@@ -19,6 +19,7 @@ ida-plugin Python executors inside IDA windows
 ### mcp-center
 
 - Exposes the only MCP endpoint used by agents.
+- Provides the desktop management interface.
 - Owns tool schemas and tool registration.
 - Tracks IDA targets and their health.
 - Routes tool calls to a target IDA executor.

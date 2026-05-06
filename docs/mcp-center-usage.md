@@ -1,61 +1,15 @@
 # MCP Center Usage
 
-## Run as an MCP Server
+## Desktop Program
 
-The center can run as a stdio MCP server while also listening for IDA plugin TCP
-connections.
-
-```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio
-```
-
-The TCP hub defaults to `127.0.0.1:9399`. The IDA plugin uses this fixed address
-so users do not need to configure every IDA window.
-
-Optional overrides:
+`mcp-center` is a desktop program. It is the main product entrypoint and starts
+the center services when the window opens.
 
 ```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --host 127.0.0.1 --port 9399
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj
 ```
 
-Pass an explicit IDA executable or app bundle when automatic discovery is not
-enough:
-
-```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ida-path "/Applications/IDA Professional 9.0.app"
-```
-
-## MCP Client Configuration
-
-Only configure the center in the MCP client. Do not configure every IDA window.
-
-The center exposes stable MCP tools. Each tool accepts an `instanceId` when it
-needs to operate on a specific IDA window.
-
-Automation tools can also launch IDA:
-
-- `ida_find_installations`
-- `ida_launch_file`
-- `ida_list_launched_processes`
-- `ida_close_target`
-
-## Local Dashboard
-
-Start the optional dashboard:
-
-```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui
-```
-
-Default dashboard URL: `http://127.0.0.1:9400/`.
-
-Override the dashboard port:
-
-```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui --ui-port 9401
-```
-
-The dashboard shows:
+The desktop window shows:
 
 - registered IDA windows and health
 - active agent calls
@@ -64,13 +18,43 @@ The dashboard shows:
 - operation logs
 - close action for registered targets
 
-## Console Diagnostics Mode
+## Local Endpoints
 
-For local diagnostics without MCP stdio:
+The desktop app starts these local endpoints:
+
+- MCP HTTP endpoint: `http://127.0.0.1:9401/mcp`
+- Health endpoint: `http://127.0.0.1:9401/health`
+- IDA plugin TCP endpoint: `127.0.0.1:9399`
+
+IDA plugin windows always connect to `127.0.0.1:9399`, so users do not configure
+each IDA window.
+
+For development only, ports can be overridden:
 
 ```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj -- --tcp-port 19520 --mcp-port 19521
 ```
 
-This mode prints the registered target count every few seconds. It is not an MCP
-stdio mode and should not be used directly by agents.
+## MCP Client Configuration
+
+Only configure the center in the MCP client. Do not configure every IDA window.
+
+The center exposes stable MCP tools. Each target-specific tool accepts
+`instanceId`, which lets an agent switch freely between multiple open IDA
+windows.
+
+Automation tools can also launch IDA:
+
+- `ida_find_installations`
+- `ida_launch_file`
+- `ida_list_launched_processes`
+- `ida_close_target`
+
+## Development Debug Host
+
+`SupperIdaMcp.Center.App` is retained as a development/debug entrypoint for
+stdio and console diagnostics. It is not the desktop product entrypoint.
+
+```bash
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio
+```

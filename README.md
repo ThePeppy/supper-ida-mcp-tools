@@ -21,28 +21,24 @@ See `docs/architecture.md` and `docs/protocol.md` for the design notes.
 
 The first runnable path is implemented:
 
-- `mcp-center` exposes stdio MCP tools and listens for IDA plugin TCP clients.
+- `mcp-center` is a cross-platform desktop application.
+- The desktop app exposes the local MCP endpoint and listens for IDA plugin TCP clients.
 - `ida-plugin` registers one IDA window over TCP and handles center-issued tool calls.
 - Closing the TCP connection removes the target from the center registry.
-
-Run the center as an MCP stdio server:
-
-```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio
-```
-
-The TCP hub listens on `127.0.0.1:9399` by default.
-
-Run with the local dashboard:
-
-```bash
-dotnet run --project mcp-center/src/SupperIdaMcp.Center.App/SupperIdaMcp.Center.App.csproj -- --stdio --ui
-```
-
-Dashboard URL: `http://127.0.0.1:9400/`.
 
 Install the IDA plugin loader:
 
 ```bash
 python3 ida-plugin/install.py
 ```
+
+Run the desktop center:
+
+```bash
+dotnet run --project mcp-center/src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj
+```
+
+Default endpoints:
+
+- MCP HTTP: `http://127.0.0.1:9401/mcp`
+- IDA plugin TCP: `127.0.0.1:9399`
