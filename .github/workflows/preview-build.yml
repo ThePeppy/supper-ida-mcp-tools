@@ -1,0 +1,64 @@
+name: Preview Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Preview artifact version.
+        required: true
+        default: 0.1.0-preview
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS DMG
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build DMG
+        run: VERSION="${{ inputs.version }}" mcp-center/packaging/macos/package-dmg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SupperIdaMcpCenter-${{ inputs.version }}-osx-arm64
+          path: artifacts/macos/SupperIdaMcpCenter-${{ inputs.version }}-osx-arm64.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows portable ZIP
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build portable ZIP
+        shell: pwsh
+        run: .\mcp-center\packaging\windows\package-zip.ps1 -Version "${{ inputs.version }}"
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SupperIdaMcpCenter-${{ inputs.version }}-win-x64
+          path: artifacts/windows/SupperIdaMcpCenter-${{ inputs.version }}-win-x64.zip
+          if-no-files-found: error

@@ -53,24 +53,13 @@ URL:  {{_mcpEndpoint}}
 
     public string ManualStdioSnippet()
     {
-        var bridge = GetBridgeProjectPath();
+        var bridge = GetBridgeLaunchCommand();
         if (bridge is null)
         {
-            return "Stdio bridge is unavailable because the repository path could not be discovered.";
+            return "Stdio bridge is unavailable because no packaged bridge executable or repository bridge project was found.";
         }
 
-        return $$"""
-For MCP clients that only support stdio, configure:
-
-command: dotnet
-args:
-  - run
-  - --project
-  - {{bridge}}
-  - --
-  - --endpoint
-  - {{_mcpEndpoint}}
-""";
+        return bridge.ToManualSnippet(_mcpEndpoint);
     }
 
     public string? GetBridgeProjectPath()
@@ -78,6 +67,11 @@ args:
         return _paths.BridgeProjectPath is not null && File.Exists(_paths.BridgeProjectPath)
             ? _paths.BridgeProjectPath
             : null;
+    }
+
+    public BridgeLaunchCommand? GetBridgeLaunchCommand()
+    {
+        return BridgeLaunchCommandResolver.Resolve(_paths);
     }
 
     private AgentConfigStatus DetectCodex(string? overridePath = null)
@@ -119,6 +113,7 @@ args:
         var exists = File.Exists(configPath);
         var text = exists ? File.ReadAllText(configPath) : string.Empty;
         var isConfigured = text.Contains($"\"{ProductInfo.AgentServerName}\"", StringComparison.Ordinal)
+            && text.Contains(_mcpEndpoint, StringComparison.Ordinal)
             && text.Contains("SupperIdaMcp.Center.Bridge", StringComparison.Ordinal);
         var hasLegacy = text.Contains("\"ida-pro-mcp\"", StringComparison.Ordinal)
             || text.Contains("13337", StringComparison.Ordinal);
@@ -136,7 +131,7 @@ args:
             exists,
             isConfigured,
             hasLegacy,
-            CanAutoConfigure: BridgeProjectPath() is not null,
+            CanAutoConfigure: BridgeLaunchCommand() is not null,
             summary,
             ClaudeSnippet());
     }
@@ -159,8 +154,8 @@ args:
 
     private void ConfigureClaudeDesktop(string configPath)
     {
-        var bridge = BridgeProjectPath()
-            ?? throw new InvalidOperationException("Bridge project path was not found.");
+        var bridge = BridgeLaunchCommand()
+            ?? throw new InvalidOperationException("Bridge executable or project path was not found.");
         Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
         if (File.Exists(configPath))
         {
@@ -185,10 +180,19 @@ args:
             root["mcpServers"] = servers;
         }
 
+        var bridgeArgs = new JsonArray();
+        foreach (var arg in bridge.Args)
+        {
+            bridgeArgs.Add(arg);
+        }
+
+        bridgeArgs.Add("--endpoint");
+        bridgeArgs.Add(_mcpEndpoint);
+
         servers[ProductInfo.AgentServerName] = new JsonObject
         {
-            ["command"] = "dotnet",
-            ["args"] = new JsonArray("run", "--project", bridge, "--", "--endpoint", _mcpEndpoint)
+            ["command"] = bridge.Command,
+            ["args"] = bridgeArgs
         };
 
         File.WriteAllText(
@@ -207,19 +211,20 @@ url = "{{_mcpEndpoint}}"
 
     private string ClaudeSnippet()
     {
-        var bridge = BridgeProjectPath() ?? "/path/to/SupperIdaMcp.Center.Bridge.csproj";
+        var bridge = BridgeLaunchCommand();
+        var command = bridge?.Command ?? "/path/to/SupperIdaMcp.Center.Bridge";
+        var commandJson = JsonSerializer.Serialize(command);
+        var args = bridge?.Args ?? [];
+        var argsJson = string.Join(
+            "," + Environment.NewLine,
+            args.Append("--endpoint").Append(_mcpEndpoint).Select(arg => $"        {JsonSerializer.Serialize(arg)}"));
         return $$"""
 {
   "mcpServers": {
     "{{ProductInfo.AgentServerName}}": {
-      "command": "dotnet",
+      "command": {{commandJson}},
       "args": [
-        "run",
-        "--project",
-        "{{bridge}}",
-        "--",
-        "--endpoint",
-        "{{_mcpEndpoint}}"
+{{argsJson}}
       ]
     }
   }
@@ -230,6 +235,11 @@ url = "{{_mcpEndpoint}}"
     private string? BridgeProjectPath()
     {
         return GetBridgeProjectPath();
+    }
+
+    private BridgeLaunchCommand? BridgeLaunchCommand()
+    {
+        return GetBridgeLaunchCommand();
     }
 
     private static IReadOnlyList<string> ClaudeConfigPaths()

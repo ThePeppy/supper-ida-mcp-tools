@@ -245,14 +245,15 @@ images/       App icon and product screenshots
 - [Agent Configuration](docs/agent-configuration.md)
 - [IDA Plugin Install](docs/ida-plugin-install.md)
 - [Auto Launch IDA](docs/auto-launch-ida.md)
+- [Release Workflow](docs/release-workflow.md)
 - [Tool Catalog](docs/tool-catalog.md)
 - [Protocol](docs/protocol.md)
 
 ## Roadmap
 
-- Signed desktop packaging for macOS and Windows.
+- Developer ID signing and notarization for public macOS distribution.
 - Richer IDA analysis and modification tools.
-- Better release automation and update channels.
+- Update channels after the release workflow stabilizes.
 - Deeper agent workflow examples for multi-service reverse engineering.
 - More visual diagnostics for long-running analysis sessions.
 
@@ -476,12 +477,13 @@ images/       应用图标和产品截图
 - [Agent 配置](docs/agent-configuration.md)
 - [IDA 插件安装](docs/ida-plugin-install.md)
 - [自动启动 IDA](docs/auto-launch-ida.md)
+- [发布工作流](docs/release-workflow.md)
 - [工具目录](docs/tool-catalog.md)
 - [协议说明](docs/protocol.md)
 
 ## 路线图
 
-- macOS 和 Windows 的签名桌面安装包。
+- 面向公开分发的 Developer ID 签名和 notarization。
 - 更完整的 IDA 分析和数据库修改工具。
 - 更完善的发布自动化和更新通道。
 - 面向多服务逆向分析的 Agent 工作流示例。

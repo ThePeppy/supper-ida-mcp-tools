@@ -6,13 +6,16 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 APP_NAME="Supper IDA MCP Center"
 EXECUTABLE_NAME="SupperIdaMcp.Center.Desktop"
+BRIDGE_EXECUTABLE_NAME="SupperIdaMcp.Center.Bridge"
 BUNDLE_ID="com.thepeppy.supper-ida-mcp-center"
 VERSION="${VERSION:-0.1.0}"
 RID="${RID:-osx-arm64}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 PROJECT="$REPO_ROOT/mcp-center/src/SupperIdaMcp.Center.Desktop/SupperIdaMcp.Center.Desktop.csproj"
+BRIDGE_PROJECT="$REPO_ROOT/mcp-center/src/SupperIdaMcp.Center.Bridge/SupperIdaMcp.Center.Bridge.csproj"
 ARTIFACT_ROOT="${ARTIFACT_ROOT:-$REPO_ROOT/artifacts/macos}"
 PUBLISH_DIR="$ARTIFACT_ROOT/publish/$RID"
+BRIDGE_PUBLISH_DIR="$ARTIFACT_ROOT/publish/$RID-bridge"
 APP_DIR="$ARTIFACT_ROOT/$APP_NAME.app"
 DMG_ROOT="$ARTIFACT_ROOT/dmg-root"
 DMG_PATH="$ARTIFACT_ROOT/SupperIdaMcpCenter-$VERSION-$RID.dmg"
@@ -65,8 +68,8 @@ sign_app_payload_files() {
 }
 
 echo "[1/7] Cleaning packaging directories"
-rm -rf "$PUBLISH_DIR" "$APP_DIR" "$DMG_ROOT" "$DMG_PATH"
-mkdir -p "$PUBLISH_DIR" "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$DMG_ROOT"
+rm -rf "$PUBLISH_DIR" "$BRIDGE_PUBLISH_DIR" "$APP_DIR" "$DMG_ROOT" "$DMG_PATH"
+mkdir -p "$PUBLISH_DIR" "$BRIDGE_PUBLISH_DIR" "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$DMG_ROOT"
 
 echo "[2/7] Publishing $RID $CONFIGURATION"
 dotnet publish "$PROJECT" \
@@ -78,14 +81,25 @@ dotnet publish "$PROJECT" \
   -p:DebugSymbols=false \
   -o "$PUBLISH_DIR"
 
+dotnet publish "$BRIDGE_PROJECT" \
+  -c "$CONFIGURATION" \
+  -r "$RID" \
+  --self-contained true \
+  -p:PublishSingleFile=false \
+  -p:DebugType=none \
+  -p:DebugSymbols=false \
+  -o "$BRIDGE_PUBLISH_DIR"
+
 echo "[3/7] Creating .app bundle"
 ditto "$PUBLISH_DIR" "$APP_DIR/Contents/MacOS"
+ditto "$BRIDGE_PUBLISH_DIR" "$APP_DIR/Contents/MacOS/Bridge"
 cp "$ICON_SOURCE" "$APP_DIR/Contents/Resources/app-icon.icns"
 sed \
   -e "s/__VERSION__/$VERSION/g" \
   -e "s/__BUNDLE_ID__/$BUNDLE_ID/g" \
   "$INFO_PLIST_TEMPLATE" > "$APP_DIR/Contents/Info.plist"
 chmod +x "$APP_DIR/Contents/MacOS/$EXECUTABLE_NAME"
+chmod +x "$APP_DIR/Contents/MacOS/Bridge/$BRIDGE_EXECUTABLE_NAME"
 
 SIGNING_IDENTITY="$(select_signing_identity)"
 echo "[4/7] Signing with identity: $SIGNING_IDENTITY"

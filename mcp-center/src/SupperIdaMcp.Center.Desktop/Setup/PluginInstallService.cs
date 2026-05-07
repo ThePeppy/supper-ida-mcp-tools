@@ -5,7 +5,7 @@ namespace SupperIdaMcp.Center.Desktop.Setup;
 internal sealed partial class PluginInstallService
 {
     private const string LoaderName = "supper_ida_mcp_plugin.py";
-    private const string PackageName = "supper_ida_plugin";
+    internal const string PackageName = "supper_ida_plugin";
     private const string LegacyBackupDirectory = ".supper_ida_mcp_legacy_backup";
     private readonly RepositoryPaths _paths;
 
@@ -16,6 +16,7 @@ internal sealed partial class PluginInstallService
 
     public PluginInstallStatus GetStatus()
     {
+        var pluginSource = PluginSourceResolver.Resolve(_paths);
         var pluginsDirectory = DefaultPluginsDirectory();
         var loaderPath = Path.Combine(pluginsDirectory, LoaderName);
         var packagePath = Path.Combine(pluginsDirectory, PackageName);
@@ -26,7 +27,7 @@ internal sealed partial class PluginInstallService
                 pluginsDirectory,
                 loaderPath,
                 packagePath,
-                _paths.IdaPluginSourceRoot,
+                pluginSource?.Root,
                 IsInstalled: false,
                 IsOurs: false,
                 IsCompatible: false,
@@ -56,7 +57,7 @@ internal sealed partial class PluginInstallService
             pluginsDirectory,
             loaderPath,
             packagePath,
-            _paths.IdaPluginSourceRoot,
+            pluginSource?.Root,
             IsInstalled: true,
             isOurs,
             isCompatible,
@@ -68,12 +69,13 @@ internal sealed partial class PluginInstallService
 
     public PluginInstallStatus InstallOrRepair()
     {
-        if (_paths.IdaPluginSourceRoot is null || !Directory.Exists(_paths.IdaPluginSourceRoot))
+        var pluginSource = PluginSourceResolver.Resolve(_paths);
+        if (pluginSource is null)
         {
-            throw new InvalidOperationException("Unable to locate ida-plugin/src. Run from the repository or install a packaged build with bundled plugin sources.");
+            throw new InvalidOperationException("Unable to locate the bundled IDA plugin resources in this build.");
         }
 
-        var packageSource = Path.Combine(_paths.IdaPluginSourceRoot, PackageName);
+        var packageSource = pluginSource.PackagePath;
         if (!Directory.Exists(packageSource))
         {
             throw new InvalidOperationException($"Unable to locate plugin package source: {packageSource}");

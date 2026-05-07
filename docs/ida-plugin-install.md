@@ -11,6 +11,11 @@ Install:
 python3 ida-plugin/install.py
 ```
 
+For packaged desktop builds, users do not need this repository. Open Supper IDA
+MCP Center, go to Settings, and use IDA Plugin > Install / Reinstall. The app
+copies the bundled plugin package from `PluginBundle/ida-plugin/src` into the
+current user's IDA plugin directory.
+
 The installer archives known legacy `ida-mcp` plugin files (`ida_mcp.py`,
 `ida_mcp/`, `mcp-plugin.py`) into `.supper_ida_mcp_legacy_backup/` under the
 IDA plugins directory. This prevents IDA from loading an incompatible old plugin

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore .NET solution
+        run: dotnet restore mcp-center/SupperIdaMcpTools.sln
+
+      - name: Build .NET solution
+        run: dotnet build mcp-center/SupperIdaMcpTools.sln --configuration Release --no-restore
+
+      - name: Compile IDA plugin Python
+        run: python -m compileall -q ida-plugin/src
+
+      - name: Validate plugin installer dry run
+        run: python ida-plugin/install.py --dry-run
+
+      - name: Verify bundled plugin resources
+        shell: bash
+        run: |
+          test -f mcp-center/src/SupperIdaMcp.Center.Desktop/bin/Release/net10.0/PluginBundle/ida-plugin/src/supper_ida_plugin/entry.py
+          test -f mcp-center/src/SupperIdaMcp.Center.Desktop/bin/Release/net10.0/PluginBundle/ida-plugin/src/supper_ida_plugin/transport/tcp_client.py
