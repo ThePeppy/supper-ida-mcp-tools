@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Fixed Streamable HTTP MCP startup compatibility with Codex by accepting JSON-RPC notifications with HTTP 202 responses.
+- Added detailed MCP operation log capture for tool name, request payload, response payload, and per-call detail inspection.
+- Added scrollable operation log browsing, row selection, copy details, and clear log actions in the desktop center.
+- Fixed release publishing workflow repository context so tag builds can create GitHub Releases correctly.
+
 ## 0.1.0
 
 - Initial rewrite scaffold.
