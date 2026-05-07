@@ -75,7 +75,14 @@ public sealed class HttpMcpServer : IAsyncDisposable
 
             using var document = await JsonDocument.ParseAsync(context.Request.InputStream, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
-            var response = await DispatchAsync(document.RootElement.Clone(), cancellationToken).ConfigureAwait(false);
+            var root = document.RootElement.Clone();
+            if (IsAcceptedWithoutResponse(root))
+            {
+                await WriteAcceptedAsync(context, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            var response = await DispatchAsync(root, cancellationToken).ConfigureAwait(false);
             await WriteJsonAsync(context, response, cancellationToken).ConfigureAwait(false);
         }
         catch (JsonException)
@@ -159,6 +166,24 @@ public sealed class HttpMcpServer : IAsyncDisposable
         };
     }
 
+    private static bool IsAcceptedWithoutResponse(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (root.TryGetProperty("method", out var method)
+            && method.ValueKind == JsonValueKind.String
+            && !root.TryGetProperty("id", out _))
+        {
+            return true;
+        }
+
+        return root.TryGetProperty("jsonrpc", out _)
+            && (root.TryGetProperty("result", out _) || root.TryGetProperty("error", out _));
+    }
+
     private async Task<object> CallToolAsync(JsonElement? parameters, CancellationToken cancellationToken)
     {
         if (parameters is not { ValueKind: JsonValueKind.Object } rawParameters
@@ -235,5 +260,15 @@ public sealed class HttpMcpServer : IAsyncDisposable
         context.Response.ContentLength64 = bytes.Length;
         await context.Response.OutputStream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
         context.Response.Close();
+    }
+
+    private static Task WriteAcceptedAsync(
+        HttpListenerContext context,
+        CancellationToken cancellationToken)
+    {
+        context.Response.StatusCode = 202;
+        context.Response.ContentLength64 = 0;
+        context.Response.Close();
+        return Task.CompletedTask;
     }
 }
