@@ -122,6 +122,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           mapfile -t files < <(find dist -type f | sort)
           if [[ "${#files[@]}" -eq 0 ]]; then
