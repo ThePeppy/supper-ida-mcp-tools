@@ -28,4 +28,12 @@ public sealed class OperationLogStore
                 .ToArray();
         }
     }
+
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _entries.Clear();
+        }
+    }
 }

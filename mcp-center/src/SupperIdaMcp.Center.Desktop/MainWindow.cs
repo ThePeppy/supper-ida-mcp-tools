@@ -51,6 +51,9 @@ public sealed class MainWindow : Window
     private TextBlock _lastUpdated = new();
     private CenterPage _selectedPage = CenterPage.Overview;
     private LogFilter _logFilter = LogFilter.All;
+    private string? _selectedLogEntryId;
+    private Vector _logScrollOffset;
+    private bool _logTailEnabled = true;
     private bool _settingsDirty = true;
     private string _lastPageFingerprint = string.Empty;
     private string _settingsMessage = string.Empty;
@@ -327,10 +330,12 @@ public sealed class MainWindow : Window
             RuntimeHolder.OperationLog.List(count)
                 .Select(log => string.Join(
                     ',',
+                    log.EntryId,
                     log.TimestampUtc.UtcTicks,
                     log.TargetInstanceId,
                     log.TargetAlias,
                     log.ToolName,
+                    log.McpToolName,
                     log.Success,
                     log.Elapsed.Ticks,
                     log.Error)));
@@ -949,31 +954,23 @@ public sealed class MainWindow : Window
 
     private Control BuildLogsPage()
     {
-        var logs = RuntimeHolder.OperationLog.List(200)
+        var logs = RuntimeHolder.OperationLog.List(500)
             .Where(MatchesLogFilter)
             .ToArray();
-        var latestError = RuntimeHolder.OperationLog.List(200).FirstOrDefault(log => !log.Success);
-        var body = logs.Length == 0
-            ? EmptyState(_text.T("empty.logs"), _text.T("empty.logsBody"))
-            : BuildLogRows(logs);
+        var selectedLog = SelectVisibleLog(logs);
 
         var content = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,300"),
+            ColumnDefinitions = new ColumnDefinitions("*,380"),
             ColumnSpacing = 14,
             Children =
             {
-                PanelCard(_text.T("logs.stream.title"), _text.T("logs.stream.summary"), body).WithColumn(0),
-                BuildLogSidePanel(latestError).WithColumn(1)
+                BuildLogStreamCard(logs).WithColumn(0),
+                BuildLogDetailPanel(selectedLog).WithColumn(1)
             }
         };
 
-        return new Border
-        {
-            Padding = new Thickness(16),
-            Background = Brush(SurfacePrimary),
-            Child = Stack(Orientation.Vertical, 14, BuildLogToolbar(), content)
-        };
+        return PageScaffold(BuildLogToolbar(), PagePadding(content));
     }
 
     private Control BuildLogToolbar()
@@ -999,7 +996,11 @@ public sealed class MainWindow : Window
                             ActionButton(_text.T("button.copy"), CopyLogsAsync, ButtonKind.ActionDark),
                             ActionButton(_text.T("button.clear"), () =>
                             {
-                                _settingsMessage = _text.T("action.clearLogUnavailable");
+                                RuntimeHolder.OperationLog.Clear();
+                                _selectedLogEntryId = null;
+                                _logScrollOffset = default;
+                                _logTailEnabled = true;
+                                RenderSelectedPage(force: true);
                                 return Task.CompletedTask;
                             }, ButtonKind.Clear))
                             .WithColumn(1)
@@ -1036,13 +1037,76 @@ public sealed class MainWindow : Window
     private Control BuildLogRows(IReadOnlyCollection<OperationLogEntry> logs)
     {
         var rows = Stack(Orientation.Vertical, 6);
-        rows.Children.Add(LogHeaderRow());
-        foreach (var log in logs.Take(120))
+        foreach (var log in logs)
         {
             rows.Children.Add(LogRow(log));
         }
 
         return rows;
+    }
+
+    private OperationLogEntry? SelectVisibleLog(IReadOnlyList<OperationLogEntry> logs)
+    {
+        if (logs.Count == 0)
+        {
+            _selectedLogEntryId = null;
+            return null;
+        }
+
+        if (_logTailEnabled)
+        {
+            _selectedLogEntryId = logs[0].EntryId;
+            return logs[0];
+        }
+
+        var selected = _selectedLogEntryId is null
+            ? null
+            : logs.FirstOrDefault(log => log.EntryId == _selectedLogEntryId);
+        if (selected is not null)
+        {
+            return selected;
+        }
+
+        _selectedLogEntryId = logs[0].EntryId;
+        return logs[0];
+    }
+
+    private Control BuildLogStreamCard(IReadOnlyCollection<OperationLogEntry> logs)
+    {
+        var rows = logs.Count == 0
+            ? EmptyState(_text.T("empty.logs"), _text.T("empty.logsBody"))
+            : BuildLogRows(logs);
+        var scroll = new ScrollViewer
+        {
+            Content = rows,
+            Padding = new Thickness(0, 0, 8, 0),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Offset = _logTailEnabled ? default : _logScrollOffset
+        };
+        scroll.ScrollChanged += (_, _) =>
+        {
+            _logScrollOffset = scroll.Offset;
+            _logTailEnabled = scroll.Offset.Y <= 2;
+        };
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12),
+            Background = Brush(SurfaceSecondary),
+            Child = new Grid
+            {
+                RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+                RowSpacing = 8,
+                Children =
+                {
+                    HeaderRow(_text.T("logs.stream.title"), _text.F("logs.stream.summary", logs.Count)).WithRow(0),
+                    LogHeaderRow().WithRow(1),
+                    scroll.WithRow(2)
+                }
+            }
+        };
     }
 
     private Control LogHeaderRow()
@@ -1053,30 +1117,38 @@ public sealed class MainWindow : Window
             Background = Brush(SurfaceTertiary),
             Padding = new Thickness(10, 8),
             Child = LogGrid(
-                Text("Time", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
-                Text("Level", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
-                Text("Source", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
-                Text("Target", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
-                Text("Message", 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont))
+                Text(_text.T("logs.table.time"), 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text(_text.T("logs.table.level"), 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text(_text.T("logs.table.source"), 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text(_text.T("logs.table.target"), 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont),
+                Text(_text.T("logs.table.message"), 10, FontWeight.SemiBold, ForegroundMuted, CaptionFont))
         };
     }
 
     private Control LogRow(OperationLogEntry log)
     {
         var success = log.Success;
+        var selected = log.EntryId == _selectedLogEntryId;
         var row = new Border
         {
             CornerRadius = new CornerRadius(10),
-            Background = Brush(success ? SurfacePrimary : StatusErrorBg),
-            BorderBrush = Brush(success ? SurfacePrimary : StatusError),
-            BorderThickness = success ? new Thickness(0) : new Thickness(1),
+            Background = Brush(selected ? StatusOnlineBg : success ? SurfacePrimary : StatusErrorBg),
+            BorderBrush = Brush(selected ? AccentPrimary : success ? SurfacePrimary : StatusError),
+            BorderThickness = selected || !success ? new Thickness(1) : new Thickness(0),
             Padding = new Thickness(10, 8),
+            Cursor = new Cursor(StandardCursorType.Hand),
             Child = LogGrid(
                 Text(log.TimestampUtc.LocalDateTime.ToString("HH:mm:ss", _text.Culture), 11, FontWeight.Normal, ForegroundMuted, DataFont),
                 Text(success ? "INFO" : "ERROR", 11, FontWeight.SemiBold, success ? ForegroundSecondary : StatusError, DataFont),
                 Text(LogSource(log), 11, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis(),
                 Text(log.TargetAlias, 11, FontWeight.Normal, ForegroundPrimary, DataFont).Ellipsis(),
                 Text(success ? $"{log.ToolName} completed in {log.Elapsed.TotalMilliseconds:0} ms" : log.Error ?? log.ToolName, 11, FontWeight.Normal, success ? ForegroundPrimary : StatusError, DataFont).Ellipsis())
+        };
+        row.PointerReleased += (_, _) =>
+        {
+            _selectedLogEntryId = log.EntryId;
+            _logTailEnabled = false;
+            RenderSelectedPage(force: true);
         };
 
         return row;
@@ -1099,27 +1171,140 @@ public sealed class MainWindow : Window
         return grid;
     }
 
-    private Control BuildLogSidePanel(OperationLogEntry? latestError)
+    private Control BuildLogDetailPanel(OperationLogEntry? selectedLog)
     {
-        var errorTile = latestError is null
-            ? StateTile(_text.T("logs.noErrorTitle"), _text.T("logs.noErrorBody"), RowKind.Success)
-            : StateTile(_text.T("logs.latestError"), latestError.Error ?? latestError.ToolName, RowKind.Danger);
+        var logs = RuntimeHolder.OperationLog.List(500).ToArray();
+        if (selectedLog is null)
+        {
+            return Stack(Orientation.Vertical, 14,
+                StateTile(_text.T("logs.noSelectionTitle"), _text.T("logs.noSelectionBody"), RowKind.Neutral),
+                LogSummaryCard(logs));
+        }
 
-        var logs = RuntimeHolder.OperationLog.List(200).ToArray();
-        return Stack(Orientation.Vertical, 14,
-            errorTile,
-            StateTile(_text.T("logs.emptyStateTitle"), _text.T("logs.emptyStateBody"), RowKind.Neutral),
-            new Border
+        var detailText = BuildSelectedLogDetailText(selectedLog);
+        var metadata = Stack(Orientation.Vertical, 8,
+            DetailLine(_text.T("logs.detail.time"), selectedLog.TimestampUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", _text.Culture)),
+            DetailLine(_text.T("logs.detail.status"), selectedLog.Success ? "INFO" : "ERROR", selectedLog.Success ? RowKind.Success : RowKind.Danger),
+            DetailLine(_text.T("logs.detail.source"), LogSource(selectedLog)),
+            DetailLine(_text.T("logs.detail.target"), selectedLog.TargetAlias),
+            DetailLine(_text.T("logs.detail.mcpTool"), selectedLog.McpToolName ?? "-"),
+            DetailLine(_text.T("logs.detail.pluginTool"), selectedLog.ToolName),
+            DetailLine(_text.T("logs.detail.duration"), $"{selectedLog.Elapsed.TotalMilliseconds:0} ms"));
+        if (!string.IsNullOrWhiteSpace(selectedLog.Error))
+        {
+            metadata.Children.Add(DetailLine(_text.T("logs.detail.error"), selectedLog.Error, RowKind.Danger));
+        }
+
+        var detailScroll = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = Stack(Orientation.Vertical, 10,
+                metadata,
+                LogDetailCodeBlock(_text.T("logs.detail.request"), selectedLog.RequestJson),
+                LogDetailCodeBlock(_text.T("logs.detail.response"), selectedLog.ResponseJson))
+        };
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12),
+            Background = Brush(SurfaceSecondary),
+            Child = new Grid
             {
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(12),
-                Background = Brush(SurfaceInverse),
-                Child = Stack(Orientation.Vertical, 8,
-                    Text(_text.T("logs.sessionSummary"), 12, FontWeight.Normal, "#B6C4B8", CaptionFont),
-                    Text(logs.Length.ToString(), 28, FontWeight.Bold, ForegroundInverse, DataFont),
-                    SummaryBar(_text.T("logs.errors"), logs.Count(log => !log.Success), logs.Length, StatusError),
-                    SummaryBar(_text.T("logs.warnings"), 0, Math.Max(logs.Length, 1), StatusWarning))
-            });
+                RowDefinitions = new RowDefinitions("Auto,*"),
+                RowSpacing = 10,
+                Children =
+                {
+                    new Grid
+                    {
+                        ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                        Children =
+                        {
+                            Stack(Orientation.Vertical, 2,
+                                Text(_text.T("logs.detail.title"), 15, FontWeight.Bold, ForegroundPrimary, HeadingFont),
+                                Text(_text.T("logs.detail.subtitle"), 11, FontWeight.Normal, ForegroundMuted, CaptionFont))
+                                .WithColumn(0),
+                            ActionButton(_text.T("button.copyDetails"), () => CopyTextAsync(detailText), ButtonKind.Filter)
+                                .WithColumn(1)
+                        }
+                    }.WithRow(0),
+                    detailScroll.WithRow(1)
+                }
+            }
+        };
+    }
+
+    private Control LogSummaryCard(IReadOnlyCollection<OperationLogEntry> logs)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12),
+            Background = Brush(SurfaceInverse),
+            Child = Stack(Orientation.Vertical, 8,
+                Text(_text.T("logs.sessionSummary"), 12, FontWeight.Normal, "#B6C4B8", CaptionFont),
+                Text(logs.Count.ToString(), 28, FontWeight.Bold, ForegroundInverse, DataFont),
+                SummaryBar(_text.T("logs.errors"), logs.Count(log => !log.Success), logs.Count, StatusError),
+                SummaryBar(_text.T("logs.warnings"), 0, Math.Max(logs.Count, 1), StatusWarning))
+        };
+    }
+
+    private Control DetailLine(string label, string? value, RowKind kind = RowKind.Neutral)
+    {
+        return new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("94,*"),
+            ColumnSpacing = 8,
+            Children =
+            {
+                Text(label, 10, FontWeight.Normal, ForegroundMuted, CaptionFont).WithColumn(0),
+                Text(string.IsNullOrWhiteSpace(value) ? "-" : value, 10, FontWeight.SemiBold, KindForeground(kind), DataFont).Wrap().WithColumn(1)
+            }
+        };
+    }
+
+    private Control LogDetailCodeBlock(string title, string? code)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            BorderBrush = Brush(CodeBorder),
+            BorderThickness = new Thickness(1),
+            Background = Brush(CodeBg),
+            Padding = new Thickness(10),
+            Child = Stack(Orientation.Vertical, 7,
+                Text(title, 10, FontWeight.SemiBold, "#B6C4B8", CaptionFont),
+                new SelectableTextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(code) ? "-" : code,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontFamily = DataFont,
+                    FontSize = 10,
+                    Foreground = Brush("#DDE9DF"),
+                    LineHeight = 15
+                })
+        };
+    }
+
+    private string BuildSelectedLogDetailText(OperationLogEntry log)
+    {
+        return string.Join(
+            Environment.NewLine,
+            $"{_text.T("logs.detail.time")}: {log.TimestampUtc.LocalDateTime:yyyy-MM-dd HH:mm:ss}",
+            $"{_text.T("logs.detail.status")}: {(log.Success ? "INFO" : "ERROR")}",
+            $"{_text.T("logs.detail.source")}: {LogSource(log)}",
+            $"{_text.T("logs.detail.target")}: {log.TargetAlias}",
+            $"{_text.T("logs.detail.mcpTool")}: {log.McpToolName ?? "-"}",
+            $"{_text.T("logs.detail.pluginTool")}: {log.ToolName}",
+            $"{_text.T("logs.detail.duration")}: {log.Elapsed.TotalMilliseconds:0} ms",
+            $"{_text.T("logs.detail.error")}: {log.Error ?? "-"}",
+            "",
+            $"## {_text.T("logs.detail.request")}",
+            log.RequestJson ?? "-",
+            "",
+            $"## {_text.T("logs.detail.response")}",
+            log.ResponseJson ?? "-");
     }
 
     private Control BuildSettingsPage()
@@ -2196,8 +2381,8 @@ public sealed class MainWindow : Window
     {
         var text = string.Join(
             Environment.NewLine,
-            RuntimeHolder.OperationLog.List(200).Select(log =>
-                $"{log.TimestampUtc.LocalDateTime:HH:mm:ss} {(log.Success ? "INFO" : "ERROR")} {log.TargetAlias} {log.ToolName} {log.Error}"));
+            RuntimeHolder.OperationLog.List(500).Select(log =>
+                $"{log.TimestampUtc.LocalDateTime:HH:mm:ss} {(log.Success ? "INFO" : "ERROR")} {log.TargetAlias} {log.McpToolName ?? log.ToolName} -> {log.ToolName} {log.Error}"));
         return CopyTextAsync(text);
     }
 
@@ -2277,7 +2462,7 @@ public sealed class MainWindow : Window
             LogFilter.Plugin => log.ToolName.StartsWith("target.", StringComparison.OrdinalIgnoreCase)
                 || log.ToolName.StartsWith("analysis.", StringComparison.OrdinalIgnoreCase),
             LogFilter.Agent => log.ToolName.StartsWith("analysis.", StringComparison.OrdinalIgnoreCase),
-            LogFilter.Mcp => log.ToolName.StartsWith("ida_", StringComparison.OrdinalIgnoreCase),
+            LogFilter.Mcp => (log.McpToolName ?? log.ToolName).StartsWith("ida_", StringComparison.OrdinalIgnoreCase),
             LogFilter.IdaTcp => log.ToolName.StartsWith("target.", StringComparison.OrdinalIgnoreCase),
             _ => true
         };
