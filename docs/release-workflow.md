@@ -3,6 +3,9 @@
 This repository uses three workflow layers so normal development, preview builds,
 and public releases stay separate.
 
+For the full maintainer checklist, packaged-resource requirements, rollback
+rules, and version update checklist, see `docs/maintainer-handbook.md`.
+
 ## 1. Pull Request / Main CI
 
 Workflow: `.github/workflows/ci.yml`

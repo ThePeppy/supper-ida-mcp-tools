@@ -246,6 +246,7 @@ images/       App icon and product screenshots
 - [IDA Plugin Install](docs/ida-plugin-install.md)
 - [Auto Launch IDA](docs/auto-launch-ida.md)
 - [Release Workflow](docs/release-workflow.md)
+- [Maintainer Handbook](docs/maintainer-handbook.md)
 - [Tool Catalog](docs/tool-catalog.md)
 - [Protocol](docs/protocol.md)
 
@@ -478,6 +479,7 @@ images/       应用图标和产品截图
 - [IDA 插件安装](docs/ida-plugin-install.md)
 - [自动启动 IDA](docs/auto-launch-ida.md)
 - [发布工作流](docs/release-workflow.md)
+- [维护者手册](docs/maintainer-handbook.md)
 - [工具目录](docs/tool-catalog.md)
 - [协议说明](docs/protocol.md)
 

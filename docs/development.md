@@ -13,3 +13,4 @@ Packaged desktop builds copy Python plugin sources into `PluginBundle/` during
 `ida-plugin/`.
 
 Release and CI workflow details live in `docs/release-workflow.md`.
+Maintainer checklists and release guardrails live in `docs/maintainer-handbook.md`.
