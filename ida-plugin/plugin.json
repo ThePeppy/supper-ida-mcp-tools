@@ -1,6 +1,6 @@
 {
   "name": "Supper IDA MCP Plugin",
   "id": "supper-ida-mcp-plugin",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "TCP executor plugin for Supper IDA MCP Tools"
 }

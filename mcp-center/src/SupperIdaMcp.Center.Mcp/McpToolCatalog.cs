@@ -195,11 +195,17 @@ public sealed class McpToolCatalog
             TargetTool(
                 "ida_search_text",
                 "Search disassembly text",
-                "Regex search over generated disassembly text.",
+                "Search IDA's rendered listing using native IDA text search. Literal substring search by default; regex is opt-in.",
                 new Dictionary<string, object?>
                 {
-                    ["pattern"] = new { type = "string", description = "Case-insensitive regular expression." },
-                    ["max"] = new { type = "integer", description = "Maximum hits.", minimum = 1, maximum = 1000 }
+                    ["pattern"] = new { type = "string", description = "Text or regex pattern to search for." },
+                    ["limit"] = new { type = "integer", description = "Maximum hits per page. Default 30, maximum 500.", minimum = 1, maximum = 500 },
+                    ["max"] = new { type = "integer", description = "Legacy alias for limit.", minimum = 1, maximum = 500 },
+                    ["start"] = new { type = "string", description = "Optional address cursor returned by a previous search." },
+                    ["regex"] = new { type = "boolean", description = "Treat pattern as a regular expression." },
+                    ["caseSensitive"] = new { type = "boolean", description = "Use case-sensitive matching." },
+                    ["include"] = new { type = "string", @enum = new[] { "disasm", "comments", "all" }, description = "Which rendered listing lines to include. Default all." },
+                    ["codeOnly"] = new { type = "boolean", description = "Restrict search to executable segments. Default true." }
                 },
                 "pattern"),
             TargetTool(

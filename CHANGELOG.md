@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Reworked `ida_search_text` to use IDA's native `ida_search.find_text()` scan instead of Python-side full-function disassembly scanning.
+- Added cursor pagination, literal-by-default matching, optional regex mode, case sensitivity, comment/disassembly filtering, and executable-segment filtering for text search.
+- Bumped the bundled IDA plugin version so Settings can correctly require plugin reinstall after this search fix.
+
 ## 0.1.1
 
 - Fixed Streamable HTTP MCP startup compatibility with Codex by accepting JSON-RPC notifications with HTTP 202 responses.
