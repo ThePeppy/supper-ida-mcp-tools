@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Added batch-mode and Python-side timeout protection around IDA plugin tool execution to reduce UI stalls.
+- Reworked `ida_search_text` again to avoid unbounded native text searches on large databases; search now returns partial results with a cursor when scan or time budgets are reached.
+- Added `scanLimit` and `timeLimitMs` controls to `ida_search_text` for safer paging on very large IDBs.
+
 ## 0.1.2
 
 - Reworked `ida_search_text` to use IDA's native `ida_search.find_text()` scan instead of Python-side full-function disassembly scanning.

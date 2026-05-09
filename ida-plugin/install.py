@@ -12,7 +12,7 @@ from pathlib import Path
 LOADER_NAME = "supper_ida_mcp_plugin.py"
 PACKAGE_NAME = "supper_ida_plugin"
 PLUGIN_ID = "supper-ida-mcp-plugin"
-PLUGIN_VERSION = "0.1.2"
+PLUGIN_VERSION = "0.1.3"
 LEGACY_PLUGIN_NAMES = ("ida_mcp.py", "ida_mcp", "mcp-plugin.py")
 LEGACY_BACKUP_DIR = ".supper_ida_mcp_legacy_backup"
 

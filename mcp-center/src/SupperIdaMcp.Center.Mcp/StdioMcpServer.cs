@@ -134,7 +134,7 @@ public sealed class StdioMcpServer
             {
                 name = "supper-ida-mcp-center",
                 title = "Supper IDA MCP Center",
-                version = "0.1.2"
+                version = "0.1.3"
             }
         };
     }

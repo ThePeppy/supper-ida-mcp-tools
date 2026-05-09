@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 
 from supper_ida_plugin.ida_runtime.addressing import clamp_int, parse_address, parse_function_start
@@ -215,55 +216,6 @@ def _bool_arg(value: Any, default: bool) -> bool:
     return bool(value)
 
 
-def _search_text_line_is_comment(tagged: str) -> bool:
-    import ida_lines  # type: ignore[import-not-found]
-
-    comment_colors = (
-        ida_lines.SCOLOR_REGCMT,
-        ida_lines.SCOLOR_RPTCMT,
-        ida_lines.SCOLOR_AUTOCMT,
-        ida_lines.SCOLOR_COLLAPSED,
-    )
-    return any(ida_lines.COLOR_ON + color in tagged for color in comment_colors)
-
-
-def _search_text_classify_hit_lines(
-    ea: int,
-    matcher: Any,
-    want_disasm: bool,
-    want_comments: bool,
-    max_lines: int = 32,
-) -> list[dict[str, str]]:
-    import ida_lines  # type: ignore[import-not-found]
-
-    try:
-        result = ida_lines.generate_disassembly(ea, max_lines, False, False)
-    except Exception:
-        return []
-
-    rendered: list[str] | None = None
-    if isinstance(result, tuple):
-        for item in result:
-            if isinstance(item, (list, tuple)) and item and isinstance(item[0], str):
-                rendered = list(item)
-                break
-    if rendered is None:
-        return []
-
-    lines: list[dict[str, str]] = []
-    for tagged in rendered:
-        text = ida_lines.tag_remove(tagged) or ""
-        if not text or not matcher(text):
-            continue
-        kind = "comment" if _search_text_line_is_comment(tagged) else "disasm"
-        if kind == "disasm" and not want_disasm:
-            continue
-        if kind == "comment" and not want_comments:
-            continue
-        lines.append({"kind": kind, "text": text})
-    return lines
-
-
 def _search_text_segments(code_only: bool) -> list[tuple[int, int]]:
     import ida_segment  # type: ignore[import-not-found]
     import idaapi  # type: ignore[import-not-found]
@@ -282,15 +234,20 @@ def _search_text_segments(code_only: bool) -> list[tuple[int, int]]:
 
 def search_text(arguments: dict[str, Any]) -> dict[str, Any]:
     import ida_funcs  # type: ignore[import-not-found]
-    import ida_search  # type: ignore[import-not-found]
+    import ida_bytes  # type: ignore[import-not-found]
+    import ida_lines  # type: ignore[import-not-found]
     import ida_segment  # type: ignore[import-not-found]
     import idaapi  # type: ignore[import-not-found]
+    import idautils  # type: ignore[import-not-found]
+    import idc  # type: ignore[import-not-found]
 
     pattern = str(arguments.get("pattern") or "")
     if not pattern:
         return {"pattern": pattern, "n": 0, "hits": [], "cursor": {"done": True}, "error": "pattern is required"}
 
     limit = clamp_int(arguments.get("limit", arguments.get("max")), 30, 1, 500)
+    scan_limit = clamp_int(arguments.get("scanLimit", arguments.get("scan_limit")), 25_000, 100, 250_000)
+    time_limit_ms = clamp_int(arguments.get("timeLimitMs", arguments.get("time_limit_ms")), 2_500, 250, 30_000)
     start = str(arguments.get("start") or "")
     regex_mode = _bool_arg(arguments.get("regex"), False)
     case_sensitive = _bool_arg(arguments.get("caseSensitive", arguments.get("case_sensitive")), False)
@@ -335,15 +292,16 @@ def search_text(arguments: dict[str, Any]) -> dict[str, Any]:
         def matcher(text: str) -> bool:
             return needle in text.lower()
 
-    search_flags = ida_search.SEARCH_DOWN | ida_search.SEARCH_NOSHOW
-    if case_sensitive:
-        search_flags |= ida_search.SEARCH_CASE
-    if regex_mode:
-        search_flags |= ida_search.SEARCH_REGEX
-
     segments = _search_text_segments(code_only)
     if not segments:
-        return {"pattern": pattern, "n": 0, "hits": [], "cursor": {"done": True}}
+        return {
+            "pattern": pattern,
+            "n": 0,
+            "hits": [],
+            "cursor": {"done": True},
+            "scanned": 0,
+            "partial": False,
+        }
 
     if start:
         try:
@@ -367,49 +325,82 @@ def search_text(arguments: dict[str, Any]) -> dict[str, Any]:
     if segment_index < len(segments) and cursor_ea < segments[segment_index][0]:
         cursor_ea = segments[segment_index][0]
 
+    scanned = 0
+    deadline = time.monotonic() + (time_limit_ms / 1000.0)
+    stop_reason: str | None = None
+
     while segment_index < len(segments) and len(hits) < limit:
         seg_start, seg_end = segments[segment_index]
-        ea = ida_search.find_text(cursor_ea, 0, 0, pattern, search_flags)
-        if ea == idaapi.BADADDR or ea >= seg_end:
-            segment_index += 1
-            if segment_index < len(segments):
-                cursor_ea = segments[segment_index][0]
-            continue
-        if ea < seg_start:
-            cursor_ea = ea + 1
-            continue
+        ea = cursor_ea
+        for head in idautils.Heads(max(seg_start, ea), seg_end):
+            scanned += 1
+            if scanned >= scan_limit:
+                next_cursor = head
+                stop_reason = "scanLimit"
+                break
+            if time.monotonic() >= deadline:
+                next_cursor = head
+                stop_reason = "timeLimit"
+                break
 
-        lines = _search_text_classify_hit_lines(ea, matcher, want_disasm, want_comments)
-        if lines:
-            hit: dict[str, Any] = {
-                "addr": hex(ea),
+            lines: list[dict[str, str]] = []
+            if want_disasm:
+                tagged = idc.generate_disasm_line(head, 0) or ""
+                text = ida_lines.tag_remove(tagged) or ""
+                if text and matcher(text):
+                    lines.append({"kind": "disasm", "text": text})
+
+            if want_comments:
+                for comment_text in (
+                    ida_bytes.get_cmt(head, False),
+                    ida_bytes.get_cmt(head, True),
+                ):
+                    if comment_text and matcher(comment_text):
+                        lines.append({"kind": "comment", "text": comment_text})
+
+            if not lines:
+                cursor_ea = head + max(1, idaapi.get_item_size(head))
+                continue
+
+            hit = {
+                "addr": hex(head),
                 "matches": lines,
-                # Backward-compatible summary for callers that consumed the old shape.
                 "text": "\n".join(line["text"] for line in lines),
             }
-            func = ida_funcs.get_func(ea)
+            func = ida_funcs.get_func(head)
             if func is not None:
                 hit["function"] = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
-            seg = idaapi.getseg(ea)
+            seg = idaapi.getseg(head)
             if seg is not None:
                 segment_name = ida_segment.get_segm_name(seg)
                 if segment_name:
                     hit["segment"] = segment_name
             hits.append(hit)
+            cursor_ea = head + max(1, idaapi.get_item_size(head))
             if len(hits) >= limit:
-                next_cursor = ea + max(1, idaapi.get_item_size(ea))
+                next_cursor = cursor_ea
                 break
 
-        item_size = idaapi.get_item_size(ea)
-        cursor_ea = ea + (item_size if item_size > 0 else 1)
+        if next_cursor is not None:
+            break
 
-    cursor = {"next": hex(next_cursor)} if next_cursor is not None else {"done": True}
+        segment_index += 1
+        if segment_index < len(segments):
+            cursor_ea = segments[segment_index][0]
+
+    partial = next_cursor is not None
+    cursor = {"next": hex(next_cursor)} if partial else {"done": True}
     return {
         "pattern": pattern,
         "n": len(hits),
         "hits": hits,
         "cursor": cursor,
-        "truncated": next_cursor is not None,
+        "truncated": partial,
+        "partial": partial,
+        "stopReason": stop_reason,
+        "scanned": scanned,
+        "scanLimit": scan_limit,
+        "timeLimitMs": time_limit_ms,
     }
 
 

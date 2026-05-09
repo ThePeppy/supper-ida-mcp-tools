@@ -147,7 +147,7 @@ public sealed class HttpMcpServer : IAsyncDisposable
             {
                 name = "supper-ida-mcp-center",
                 title = "Supper IDA MCP Center",
-                version = "0.1.2"
+                version = "0.1.3"
             }
         };
     }

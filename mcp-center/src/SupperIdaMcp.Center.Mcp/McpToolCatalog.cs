@@ -205,7 +205,9 @@ public sealed class McpToolCatalog
                     ["regex"] = new { type = "boolean", description = "Treat pattern as a regular expression." },
                     ["caseSensitive"] = new { type = "boolean", description = "Use case-sensitive matching." },
                     ["include"] = new { type = "string", @enum = new[] { "disasm", "comments", "all" }, description = "Which rendered listing lines to include. Default all." },
-                    ["codeOnly"] = new { type = "boolean", description = "Restrict search to executable segments. Default true." }
+                    ["codeOnly"] = new { type = "boolean", description = "Restrict search to executable segments. Default true." },
+                    ["scanLimit"] = new { type = "integer", description = "Maximum listing items to scan before returning a cursor. Default 25000.", minimum = 100, maximum = 250000 },
+                    ["timeLimitMs"] = new { type = "integer", description = "Maximum time budget per search page before returning a cursor. Default 2500.", minimum = 250, maximum = 30000 }
                 },
                 "pattern"),
             TargetTool(
