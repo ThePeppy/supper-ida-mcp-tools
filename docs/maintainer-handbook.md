@@ -46,6 +46,14 @@ Bridge/SupperIdaMcp.Center.Bridge.exe
 
 适用场景：普通功能开发、UI 修复、协议调整、文档更新。
 
+优先使用仓库根目录的 Makefile：
+
+```bash
+make check
+```
+
+展开后等价于核心 CI 检查：
+
 ```bash
 dotnet build mcp-center/SupperIdaMcpTools.sln -c Release --no-restore
 python3 -m compileall -q ida-plugin/src
@@ -121,13 +129,13 @@ GitHub 会运行 `.github/workflows/release.yml`：
 ## 本地 macOS 打包
 
 ```bash
-mcp-center/packaging/macos/package-dmg.sh
+make package-macos
 ```
 
 可指定版本：
 
 ```bash
-VERSION=0.1.0 mcp-center/packaging/macos/package-dmg.sh
+VERSION=0.1.0 make package-macos
 ```
 
 验证：
