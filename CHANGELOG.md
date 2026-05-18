@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.4
+
+### New Features
+
+- **opencode one-click configuration**: The desktop center now auto-detects opencode and supports writing MCP configuration to `opencode.json` with a single click. opencode connects via Streamable HTTP, no stdio bridge required.
+- **Plugin directory folder picker**: Added a "Browse" button to the IDA Plugin settings card, allowing users to manually select the IDA plugins directory through a system folder dialog. The selection is persisted across restarts.
+
+### Bug Fixes
+
+- **Windows plugin installation directory**: Fixed a critical issue where the IDA plugin was installed to `%APPDATA%\Hex-Rays\IDA Pro\plugins` on Windows, which IDA Pro does not load plugins from. The desktop center and the Python CLI installer now automatically detect the IDA installation directory (e.g. `C:\Program Files\IDA Professional 9.3\plugins`) and install to the correct `plugins` subfolder. Falls back to the legacy APPDATA path only when no IDA installation is found.
+
+### Improvements
+
+- Plugin directory resolution now follows a clear priority chain: user preference > `IDAUSR` environment variable > auto-detected IDA installation directory > platform default fallback.
+- Updated bundled plugin version to 0.1.4.
+
 ## 0.1.3
 
 - Added batch-mode and Python-side timeout protection around IDA plugin tool execution to reduce UI stalls.
