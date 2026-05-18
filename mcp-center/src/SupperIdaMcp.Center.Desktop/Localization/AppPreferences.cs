@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace SupperIdaMcp.Center.Desktop.Localization;
 
-internal sealed record AppPreferences(AppLanguage Language);
+internal sealed record AppPreferences(AppLanguage Language, string? IdaPluginsDirectory = null);
 
 internal static class AppPreferencesStore
 {
@@ -22,7 +22,7 @@ internal static class AppPreferencesStore
             }
 
             var file = JsonSerializer.Deserialize<PreferenceFile>(File.ReadAllText(path));
-            return new AppPreferences(ParseLanguage(file?.Language) ?? DefaultLanguage());
+            return new AppPreferences(ParseLanguage(file?.Language) ?? DefaultLanguage(), file?.IdaPluginsDirectory);
         }
         catch
         {
@@ -34,7 +34,7 @@ internal static class AppPreferencesStore
     {
         var path = PreferencesPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var file = new PreferenceFile(LanguageCode(preferences.Language));
+        var file = new PreferenceFile(LanguageCode(preferences.Language), preferences.IdaPluginsDirectory);
         File.WriteAllText(path, JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true }));
         Saved?.Invoke(preferences);
     }
@@ -69,5 +69,5 @@ internal static class AppPreferencesStore
         };
     }
 
-    private sealed record PreferenceFile(string Language);
+    private sealed record PreferenceFile(string? Language, string? IdaPluginsDirectory = null);
 }

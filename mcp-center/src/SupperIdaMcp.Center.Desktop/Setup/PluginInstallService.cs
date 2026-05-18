@@ -1,4 +1,7 @@
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using SupperIdaMcp.Center.Desktop.Localization;
+using SupperIdaMcp.Center.Ida;
 
 namespace SupperIdaMcp.Center.Desktop.Setup;
 
@@ -8,23 +11,25 @@ internal sealed partial class PluginInstallService
     internal const string PackageName = "supper_ida_plugin";
     private const string LegacyBackupDirectory = ".supper_ida_mcp_legacy_backup";
     private readonly RepositoryPaths _paths;
+    private readonly IdaLocator? _idaLocator;
 
-    public PluginInstallService(RepositoryPaths paths)
+    public PluginInstallService(RepositoryPaths paths, IdaLocator? idaLocator = null)
     {
         _paths = paths;
+        _idaLocator = idaLocator;
     }
 
-    public PluginInstallStatus GetStatus()
+    public PluginInstallStatus GetStatus(string? pluginsDirectory = null)
     {
         var pluginSource = PluginSourceResolver.Resolve(_paths);
-        var pluginsDirectory = DefaultPluginsDirectory();
-        var loaderPath = Path.Combine(pluginsDirectory, LoaderName);
-        var packagePath = Path.Combine(pluginsDirectory, PackageName);
+        var pluginsDirectoryResolved = ResolvePluginsDirectory(pluginsDirectory);
+        var loaderPath = Path.Combine(pluginsDirectoryResolved, LoaderName);
+        var packagePath = Path.Combine(pluginsDirectoryResolved, PackageName);
         var warnings = DetectMisplacedLoaders(loaderPath);
         if (!File.Exists(loaderPath))
         {
             return new PluginInstallStatus(
-                pluginsDirectory,
+                pluginsDirectoryResolved,
                 loaderPath,
                 packagePath,
                 pluginSource?.Root,
@@ -54,7 +59,7 @@ internal sealed partial class PluginInstallService
                 : $"Installed loader version is {version ?? "unknown"}, expected {ProductInfo.PluginVersion}.";
 
         return new PluginInstallStatus(
-            pluginsDirectory,
+            pluginsDirectoryResolved,
             loaderPath,
             packagePath,
             pluginSource?.Root,
@@ -67,7 +72,7 @@ internal sealed partial class PluginInstallService
             warnings);
     }
 
-    public PluginInstallStatus InstallOrRepair()
+    public PluginInstallStatus InstallOrRepair(string? pluginsDirectory = null)
     {
         var pluginSource = PluginSourceResolver.Resolve(_paths);
         if (pluginSource is null)
@@ -81,11 +86,11 @@ internal sealed partial class PluginInstallService
             throw new InvalidOperationException($"Unable to locate plugin package source: {packageSource}");
         }
 
-        var pluginsDirectory = DefaultPluginsDirectory();
-        Directory.CreateDirectory(pluginsDirectory);
-        ArchiveLegacyPlugins(pluginsDirectory);
-        var loaderPath = Path.Combine(pluginsDirectory, LoaderName);
-        var packagePath = Path.Combine(pluginsDirectory, PackageName);
+        var pluginsDir = ResolvePluginsDirectory(pluginsDirectory);
+        Directory.CreateDirectory(pluginsDir);
+        ArchiveLegacyPlugins(pluginsDir);
+        var loaderPath = Path.Combine(pluginsDir, LoaderName);
+        var packagePath = Path.Combine(pluginsDir, PackageName);
         if (Directory.Exists(packagePath))
         {
             Directory.Delete(packagePath, recursive: true);
@@ -93,19 +98,20 @@ internal sealed partial class PluginInstallService
 
         CopyDirectory(packageSource, packagePath);
         File.WriteAllText(loaderPath, BuildLoader());
-        return GetStatus();
+        return GetStatus(pluginsDirectory);
     }
 
     public PluginInstallStatus ArchiveLegacyPlugins()
     {
-        ArchiveLegacyPlugins(DefaultPluginsDirectory());
+        ArchiveLegacyPlugins(ResolvePluginsDirectory());
         return GetStatus();
     }
 
     public PluginInstallStatus Uninstall()
     {
-        var loaderPath = Path.Combine(DefaultPluginsDirectory(), LoaderName);
-        var packagePath = Path.Combine(DefaultPluginsDirectory(), PackageName);
+        var pluginsDir = ResolvePluginsDirectory();
+        var loaderPath = Path.Combine(pluginsDir, LoaderName);
+        var packagePath = Path.Combine(pluginsDir, PackageName);
         if (File.Exists(loaderPath))
         {
             var content = File.ReadAllText(loaderPath);
@@ -125,27 +131,56 @@ internal sealed partial class PluginInstallService
         return GetStatus();
     }
 
-    private static string DefaultPluginsDirectory()
+    public string ResolvePluginsDirectory(string? overrideDirectory = null)
     {
+        if (!string.IsNullOrWhiteSpace(overrideDirectory))
+            return Path.GetFullPath(overrideDirectory);
+
+        var userDir = AppPreferencesStore.Load().IdaPluginsDirectory;
+        if (!string.IsNullOrWhiteSpace(userDir) && Directory.Exists(userDir))
+            return Path.GetFullPath(userDir);
+
         var idaUser = Environment.GetEnvironmentVariable("IDAUSR");
         if (!string.IsNullOrWhiteSpace(idaUser))
-        {
             return Path.Combine(ExpandHome(idaUser), "plugins");
-        }
-
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (OperatingSystem.IsMacOS())
-        {
-            return Path.Combine(home, ".idapro", "plugins");
-        }
 
         if (OperatingSystem.IsWindows())
         {
+            var idaInstallDir = FindIdaInstallPluginsDirectory();
+            if (idaInstallDir is not null)
+                return idaInstallDir;
+
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             return Path.Combine(appData, "Hex-Rays", "IDA Pro", "plugins");
         }
 
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (OperatingSystem.IsMacOS())
+            return Path.Combine(home, ".idapro", "plugins");
+
         return Path.Combine(home, ".idapro", "plugins");
+    }
+
+    private string? FindIdaInstallPluginsDirectory()
+    {
+        if (_idaLocator is null)
+            return null;
+
+        foreach (var install in _idaLocator.FindInstallations())
+        {
+            if (!install.Exists)
+                continue;
+
+            var dir = Path.GetDirectoryName(install.Path);
+            if (dir is null)
+                continue;
+
+            var pluginsDir = Path.Combine(dir, "plugins");
+            if (Directory.Exists(pluginsDir))
+                return pluginsDir;
+        }
+
+        return null;
     }
 
     private static string ExpandHome(string path)

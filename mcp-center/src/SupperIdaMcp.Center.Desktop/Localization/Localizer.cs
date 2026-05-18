@@ -258,7 +258,10 @@ internal sealed class Localizer
         ["agent.summary.claudeCreate"] = "Config file will be created.",
         ["manual.http"] = "For MCP clients that support Streamable HTTP, add:\n\nName: {0}\nURL:  {1}",
         ["manual.stdio"] = "For MCP clients that only support stdio, configure:\n\ncommand: dotnet\nargs:\n  - run\n  - --project\n  - {0}\n  - --\n  - --endpoint\n  - {1}",
-        ["manual.stdioUnavailable"] = "Stdio bridge is unavailable because the repository path could not be discovered."
+        ["manual.stdioUnavailable"] = "Stdio bridge is unavailable because the repository path could not be discovered.",
+        ["button.browsePluginDir"] = "Browse...",
+        ["plugin.browseTitle"] = "Select IDA plugins directory",
+        ["plugin.directorySet"] = "Plugin directory set to: {0}"
     };
 
     private static readonly IReadOnlyDictionary<string, string> Chinese = new Dictionary<string, string>
@@ -515,7 +518,10 @@ internal sealed class Localizer
         ["agent.summary.claudeCreate"] = "将创建配置文件。",
         ["manual.http"] = "支持 Streamable HTTP 的 MCP 客户端可添加:\n\n名称: {0}\nURL:  {1}",
         ["manual.stdio"] = "仅支持 stdio 的 MCP 客户端可配置:\n\ncommand: dotnet\nargs:\n  - run\n  - --project\n  - {0}\n  - --\n  - --endpoint\n  - {1}",
-        ["manual.stdioUnavailable"] = "无法发现仓库路径，因此 stdio bridge 暂不可用。"
+        ["manual.stdioUnavailable"] = "无法发现仓库路径，因此 stdio bridge 暂不可用。",
+        ["button.browsePluginDir"] = "浏览...",
+        ["plugin.browseTitle"] = "选择 IDA 插件目录",
+        ["plugin.directorySet"] = "插件目录已设为: {0}"
     };
 
     public Localizer(AppLanguage language)

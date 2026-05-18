@@ -26,7 +26,7 @@ internal static class RuntimeHolder
     public static readonly IdaTcpHub TcpHub = new(TcpOptions, TargetRegistry);
     public static readonly HttpMcpServer McpServer = new(McpOptions, ToolCatalog, ToolHandler);
     public static readonly RepositoryPaths RepositoryPaths = RepositoryPaths.Discover();
-    public static readonly PluginInstallService PluginInstallService = new(RepositoryPaths);
+    public static readonly PluginInstallService PluginInstallService = new(RepositoryPaths, IdaLocator);
     public static readonly AgentConfigService AgentConfigService = new(RepositoryPaths, McpServer.Url);
 
     private static readonly CancellationTokenSource Shutdown = new();

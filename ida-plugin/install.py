@@ -68,11 +68,47 @@ def default_plugins_dir() -> Path:
     if system == "darwin":
         return home / ".idapro" / "plugins"
     if system == "windows":
+        ida_install_dir = _find_windows_ida_plugins_dir()
+        if ida_install_dir is not None:
+            return ida_install_dir
         appdata = os.environ.get("APPDATA")
         if appdata:
             return Path(appdata) / "Hex-Rays" / "IDA Pro" / "plugins"
         return home / "AppData" / "Roaming" / "Hex-Rays" / "IDA Pro" / "plugins"
     return home / ".idapro" / "plugins"
+
+
+def _find_windows_ida_plugins_dir() -> Path | None:
+    roots: list[Path] = []
+    pf = os.environ.get("ProgramFiles")
+    if pf:
+        roots.append(Path(pf))
+    pf_x86 = os.environ.get("ProgramFiles(x86)")
+    if pf_x86:
+        roots.append(Path(pf_x86))
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        roots.append(Path(local_appdata))
+
+    ida_exe_names = ("ida64.exe", "ida.exe", "idat64.exe", "idat.exe")
+    for root in roots:
+        if not root.is_dir():
+            continue
+        try:
+            for entry in root.iterdir():
+                if not entry.is_dir():
+                    continue
+                name_lower = entry.name.lower()
+                if not name_lower.startswith("ida"):
+                    continue
+                for exe_name in ida_exe_names:
+                    if (entry / exe_name).is_file():
+                        plugins = entry / "plugins"
+                        if plugins.is_dir():
+                            return plugins
+        except PermissionError:
+            continue
+    return None
 
 
 def find_legacy_plugins(plugins_dir: Path) -> list[Path]:

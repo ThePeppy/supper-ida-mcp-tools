@@ -7,6 +7,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Controls.Shapes;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using SupperIdaMcp.Center.Core;
 using SupperIdaMcp.Center.Desktop.Localization;
@@ -1447,7 +1448,8 @@ public sealed class MainWindow : Window
                 _settingsDirty = true;
                 RenderSelectedPage(force: true);
                 return Task.CompletedTask;
-            }, ButtonKind.Secondary));
+            }, ButtonKind.Secondary),
+            ActionButton(_text.T("button.browsePluginDir"), () => BrowsePluginDirectoryAsync(), ButtonKind.Secondary));
 
         var panel = Stack(Orientation.Vertical, 10,
             SettingsSectionHeader(_text.T("settings.idaPlugin"), _text.T("settings.pluginMeta")),
@@ -1462,6 +1464,38 @@ public sealed class MainWindow : Window
         }
 
         return SectionCard(panel);
+    }
+
+    private async Task BrowsePluginDirectoryAsync()
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.StorageProvider is null)
+            return;
+
+        var result = await topLevel.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
+        {
+            Title = _text.T("plugin.browseTitle"),
+            AllowMultiple = false
+        }).ConfigureAwait(true);
+
+        var folder = result.FirstOrDefault();
+        if (folder is null)
+            return;
+
+        var path = folder.TryGetLocalPath();
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        var pluginsDir = path.EndsWith("plugins", StringComparison.OrdinalIgnoreCase)
+            ? path
+            : System.IO.Path.Combine(path, "plugins");
+
+        var prefs = AppPreferencesStore.Load();
+        AppPreferencesStore.Save(prefs with { IdaPluginsDirectory = pluginsDir });
+
+        _settingsMessage = _text.F("plugin.directorySet", pluginsDir);
+        _settingsDirty = true;
+        RenderSelectedPage(force: true);
     }
 
     private Control AgentSettingsCard(IReadOnlyCollection<AgentConfigStatus> agents)
