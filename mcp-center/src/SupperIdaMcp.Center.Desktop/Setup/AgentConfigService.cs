@@ -20,7 +20,8 @@ internal sealed class AgentConfigService
         return
         [
             DetectCodex(),
-            .. DetectClaudeDesktopConfigs()
+            .. DetectClaudeDesktopConfigs(),
+            .. DetectOpencodeConfigs()
         ];
     }
 
@@ -36,6 +37,12 @@ internal sealed class AgentConfigService
         {
             ConfigureClaudeDesktop(configPath);
             return DetectClaudeDesktop(configPath);
+        }
+
+        if (agentName.StartsWith("opencode", StringComparison.OrdinalIgnoreCase))
+        {
+            ConfigureOpencode(configPath);
+            return DetectOpencode(configPath);
         }
 
         throw new InvalidOperationException($"Unsupported agent: {agentName}");
@@ -304,5 +311,99 @@ url = "{{_mcpEndpoint}}"
     private static string Home()
     {
         return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
+
+    private IEnumerable<AgentConfigStatus> DetectOpencodeConfigs()
+    {
+        foreach (var path in OpencodeConfigPaths())
+        {
+            yield return DetectOpencode(path);
+        }
+    }
+
+    private AgentConfigStatus DetectOpencode(string configPath)
+    {
+        var exists = File.Exists(configPath);
+        var text = exists ? File.ReadAllText(configPath) : string.Empty;
+        var isConfigured = text.Contains($"\"{ProductInfo.AgentServerName}\"", StringComparison.Ordinal)
+            && text.Contains(_mcpEndpoint, StringComparison.Ordinal);
+        var summary = isConfigured
+            ? "Configured for this desktop center."
+            : exists ? "Config file found, center not configured." : "Config file will be created.";
+
+        return new AgentConfigStatus(
+            "opencode",
+            configPath,
+            exists,
+            isConfigured,
+            HasLegacyConfig: false,
+            CanAutoConfigure: true,
+            summary,
+            OpencodeSnippet());
+    }
+
+    private void ConfigureOpencode(string configPath)
+    {
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(configPath)!);
+        if (File.Exists(configPath))
+        {
+            Backup(configPath);
+        }
+
+        JsonObject root;
+        if (File.Exists(configPath) && !string.IsNullOrWhiteSpace(File.ReadAllText(configPath)))
+        {
+            root = JsonNode.Parse(File.ReadAllText(configPath)) as JsonObject
+                ?? throw new InvalidOperationException("opencode config root must be a JSON object.");
+        }
+        else
+        {
+            root = new JsonObject();
+        }
+
+        var mcp = root["mcp"] as JsonObject;
+        if (mcp is null)
+        {
+            mcp = new JsonObject();
+            root["mcp"] = mcp;
+        }
+
+        mcp[ProductInfo.AgentServerName] = new JsonObject
+        {
+            ["type"] = "remote",
+            ["url"] = _mcpEndpoint,
+            ["enabled"] = true
+        };
+
+        File.WriteAllText(
+            configPath,
+            root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine,
+            Encoding.UTF8);
+    }
+
+    private string OpencodeSnippet()
+    {
+        return $$"""
+{
+  "mcp": {
+    "{{ProductInfo.AgentServerName}}": {
+      "type": "remote",
+      "url": "{{_mcpEndpoint}}",
+      "enabled": true
+    }
+  }
+}
+""";
+    }
+
+    private static IReadOnlyList<string> OpencodeConfigPaths()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return [System.IO.Path.Combine(appData, "opencode", "opencode.json")];
+        }
+
+        return [System.IO.Path.Combine(Home(), ".config", "opencode", "opencode.json")];
     }
 }

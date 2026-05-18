@@ -2470,8 +2470,11 @@ public sealed class MainWindow : Window
     private string AgentSummary(AgentConfigStatus agent)
     {
         var isCodex = agent.AgentName.StartsWith("Codex", StringComparison.OrdinalIgnoreCase);
+        var isOpencode = agent.AgentName.StartsWith("opencode", StringComparison.OrdinalIgnoreCase);
         if (agent.IsConfigured)
         {
+            if (isOpencode)
+                return _text.T("agent.summary.configuredRemote");
             return _text.T(isCodex ? "agent.summary.configuredHttp" : "agent.summary.configuredBridge");
         }
 
@@ -2482,10 +2485,10 @@ public sealed class MainWindow : Window
 
         if (agent.ConfigExists)
         {
-            return _text.T(isCodex ? "agent.summary.codexFound" : "agent.summary.claudeFound");
+            return _text.T(isOpencode ? "agent.summary.opencodeFound" : isCodex ? "agent.summary.codexFound" : "agent.summary.claudeFound");
         }
 
-        return _text.T(isCodex ? "agent.summary.codexCreate" : "agent.summary.claudeCreate");
+        return _text.T(isOpencode ? "agent.summary.opencodeCreate" : isCodex ? "agent.summary.codexCreate" : "agent.summary.claudeCreate");
     }
 
     private bool MatchesLogFilter(OperationLogEntry log)
